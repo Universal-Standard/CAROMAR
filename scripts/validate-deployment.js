@@ -102,7 +102,8 @@ function validateRequiredFiles() {
         'public/robots.txt',
         'public/sitemap.xml',
         'README.md',
-        'NETLIFY_DEPLOYMENT.md'
+        'docs/README.md',
+        'docs/deployment/netlify.md'
     ];
     
     requiredFiles.forEach(file => {
