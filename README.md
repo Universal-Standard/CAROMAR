@@ -14,7 +14,7 @@ Deploy CAROMAR to Netlify with one click:
 
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/US-SPURS/CAROMAR)
 
-**[📖 Full Deployment Guide](./NETLIFY_DEPLOYMENT.md)** | **[✅ Deployment Fixes](./DEPLOYMENT_FIXES.md)**
+**[📖 Full Deployment Guide](./docs/deployment/netlify.md)**
 
 ---
 
@@ -136,7 +136,7 @@ netlify deploy --prod
 2. Connect repository in Netlify Dashboard
 3. Automatic deployments on every push
 
-**📖 See [NETLIFY_DEPLOYMENT.md](./NETLIFY_DEPLOYMENT.md) for detailed instructions**
+**📖 See [Netlify Deployment Guide](./docs/deployment/netlify.md) for detailed instructions**
 
 ---
 
@@ -217,7 +217,7 @@ The application provides several REST API endpoints:
 - `GET /api/health` - Health check endpoint
 - `GET /api/metrics` - Performance metrics
 
-**📖 See [API.md](./API.md) for detailed API documentation**
+**📖 See [API Documentation](./docs/api/endpoints.md) for detailed API documentation**
 
 ---
 
@@ -342,12 +342,17 @@ We welcome contributions! Please follow these steps:
 
 ## Documentation
 
-- **[README.md](./README.md)** - This file (Overview & Quick Start)
-- **[NETLIFY_DEPLOYMENT.md](./NETLIFY_DEPLOYMENT.md)** - Netlify deployment guide
-- **[DEPLOYMENT_FIXES.md](./DEPLOYMENT_FIXES.md)** - Deployment fixes summary
-- **[SETUP.md](./SETUP.md)** - Detailed setup instructions
-- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Development guide
-- **[API.md](./API.md)** - API documentation
+### 📚 [Complete Documentation Index](./docs/README.md)
+
+**Quick Links:**
+- **[Quick Start Guide](./docs/guides/quickstart.md)** - Get started in 5 minutes
+- **[Setup Guide](./docs/guides/setup.md)** - Detailed installation instructions
+- **[Development Guide](./docs/guides/development.md)** - Architecture and development
+- **[API Documentation](./docs/api/endpoints.md)** - Complete API reference
+- **[Netlify Deployment](./docs/deployment/netlify.md)** - Deploy to Netlify
+- **[Environment Config](./docs/deployment/environment.md)** - Configuration guide
+
+**Project Documentation:**
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Contribution guidelines
 - **[SECURITY.md](./SECURITY.md)** - Security policy
 - **[CHANGELOG.md](./CHANGELOG.md)** - Version history
@@ -367,9 +372,10 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 If you encounter any issues or have questions:
 
 1. **Check Documentation:**
-   - [Setup Guide](./SETUP.md)
-   - [Deployment Guide](./NETLIFY_DEPLOYMENT.md)
-   - [API Documentation](./API.md)
+   - [Documentation Index](./docs/README.md)
+   - [Quick Start Guide](./docs/guides/quickstart.md)
+   - [Deployment Guide](./docs/deployment/netlify.md)
+   - [API Documentation](./docs/api/endpoints.md)
 
 2. **Search Issues:**
    - Check [existing issues](https://github.com/US-SPURS/CAROMAR/issues)

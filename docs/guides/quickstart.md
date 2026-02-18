@@ -1,21 +1,24 @@
-# CAROMAR Quick Start Guide
+# Quick Start Guide
 
 Get CAROMAR up and running in under 5 minutes!
 
+---
+
 ## 🚀 For Users (No Installation Required)
 
-### Option 1: Use Deployed Version
-Simply visit the deployed CAROMAR instance:
-- **Production:** https://caromar.netlify.app (update with your actual URL)
+### Use Deployed Version
+
+Simply visit the deployed CAROMAR instance at your Netlify URL.
 
 ### How to Use:
-1. Get a GitHub Personal Access Token:
+
+1. **Get a GitHub Personal Access Token:**
    - Go to https://github.com/settings/tokens
    - Click "Generate new token (classic)"
    - Select scopes: `repo` and `user`
    - Copy the token
 
-2. Use CAROMAR:
+2. **Use CAROMAR:**
    - Enter your GitHub token
    - Search for repositories by username
    - Select operation mode (Fork or Merge)
@@ -34,7 +37,7 @@ Simply visit the deployed CAROMAR instance:
 
 #### Step 1: Clone & Install
 ```bash
-git clone https://github.com/US-SPURS/CAROMAR.git
+git clone https://github.com/Universal-Standard/CAROMAR.git
 cd CAROMAR
 npm install
 ```
@@ -58,14 +61,13 @@ Then open http://localhost:3000
 ## 🌐 For Deployers (Netlify Deployment)
 
 ### Method 1: One-Click Deploy (Easiest)
-1. Click the button:  
-   [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/US-SPURS/CAROMAR)
 
+1. Click the deploy button in the README
 2. Follow Netlify's prompts
-
 3. Your site is live!
 
 ### Method 2: GitHub Integration (Recommended)
+
 1. Push repository to GitHub (if not already done)
 2. Go to https://app.netlify.com
 3. Click "Add new site" → "Import an existing project"
@@ -98,30 +100,6 @@ npm run dev            # Start with auto-reload
 npm test               # Run tests
 npm run validate       # Validate deployment config
 ```
-
-### Deployment Verification
-```bash
-# After deploying, monitor health:
-node scripts/monitor-deployment.js https://your-site.netlify.app
-```
-
----
-
-## 📚 Next Steps
-
-### For Users:
-- Read the [User Guide](./README.md#usage-guide) for detailed instructions
-- Learn about [GitHub Token Setup](./README.md#github-token-setup)
-
-### For Developers:
-- Check [SETUP.md](./SETUP.md) for detailed setup
-- Read [DEVELOPMENT.md](./DEVELOPMENT.md) for architecture details
-- Review [API.md](./API.md) for API documentation
-
-### For Deployers:
-- Read [NETLIFY_DEPLOYMENT.md](./NETLIFY_DEPLOYMENT.md) for comprehensive guide
-- Check [DEPLOYMENT_FIXES.md](./DEPLOYMENT_FIXES.md) for what was fixed
-- Configure custom domain in Netlify dashboard
 
 ---
 
@@ -167,18 +145,22 @@ npm test
 npm run lint
 ```
 
-### Views Not Rendering
-- Ensure `views/` directory exists
-- Check `netlify.toml` includes `views/**` in `included_files`
-- Verify `VIEWS_PATH` is set in `functions/server.js`
-
 ---
 
-## 📞 Get Help
+## 📚 Next Steps
 
-- **Documentation:** Check all `.md` files in repository
-- **Issues:** https://github.com/US-SPURS/CAROMAR/issues
-- **Discussions:** GitHub Discussions (if enabled)
+### For Users:
+- Read the [main README](../../README.md) for detailed instructions
+- Learn about [GitHub Token Setup](./setup.md#github-token-setup)
+
+### For Developers:
+- Check [Setup Guide](./setup.md) for detailed setup
+- Read [Development Guide](./development.md) for architecture details
+- Review [API Documentation](../api/endpoints.md)
+
+### For Deployers:
+- Read [Netlify Deployment Guide](../deployment/netlify.md)
+- Configure custom domain in Netlify dashboard
 
 ---
 
@@ -192,8 +174,6 @@ npm run lint
 | Run Tests | `npm test` |
 | Validate Config | `npm run validate` |
 | Deploy to Netlify | `netlify deploy --prod` |
-| Monitor Deployment | `node scripts/monitor-deployment.js <url>` |
-| Check Health | `curl https://your-site.netlify.app/api/health` |
 
 ---
 
@@ -231,37 +211,10 @@ npm run lint
 
 ---
 
-## 🎓 Learning Path
-
-**Beginner:** Just want to use it?
-1. Get GitHub token
-2. Visit deployed site
-3. Start forking/merging!
-
-**Intermediate:** Want to run locally?
-1. Clone repository
-2. Install dependencies
-3. Start server
-4. Experiment!
-
-**Advanced:** Want to deploy your own?
-1. Fork repository
-2. Deploy to Netlify
-3. Configure custom domain
-4. Monitor and maintain!
-
-**Expert:** Want to contribute?
-1. Read DEVELOPMENT.md
-2. Set up development environment
-3. Write tests
-4. Submit pull requests!
-
----
-
 **Ready to start?** Choose your path above and let's go! 🚀
 
 ---
 
-**Last Updated:** February 10, 2026  
+**Last Updated:** February 18, 2026  
 **Version:** 1.0.0  
 **Status:** ✅ Production Ready
