@@ -40,7 +40,7 @@
   },
   "homepage": "https://github.com/US-SPURS/CAROMAR#readme",
   "dependencies": {
-    "axios": "^1.5.0",
+    "axios": "^1.13.5",
     "serverless-http": "^3.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
