@@ -76,7 +76,7 @@ describe('Merge Automation Utilities', () => {
                     return Promise.resolve({
                         data: {
                             tree: [
-                                { type: 'blob', path: '__tests__/ok.test.js', sha: 'sha-ok', size: 32 },
+                                { type: 'blob', path: 'tests/ok.test.js', sha: 'sha-ok', size: 32 },
                                 { type: 'blob', path: 'bad.bin', sha: 'sha-bad', size: 64 },
                                 { type: 'blob', path: 'large.bin', sha: 'sha-large', size: MAX_FILE_SIZE_BYTES + 1 }
                             ]
