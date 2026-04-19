@@ -969,6 +969,56 @@ class EnhancedCaromarApp {
     showMergeInstructions(result) {
         const resultsSection = document.getElementById('results-section');
         const resultsContent = document.getElementById('results-content');
+        const automatedMerge = result.automated_merge;
+        const fallbackInstructions = result.merge_instructions;
+
+        let detailsHtml = '';
+
+        if (automatedMerge) {
+            detailsHtml = `
+                <div class="merge-instructions">
+                    <h4>🤖 Automated Merge Summary</h4>
+                    <p><strong>Total merged files:</strong> ${automatedMerge.mergedFiles}</p>
+                    <p><strong>Source repositories:</strong> ${automatedMerge.sourceRepositories}</p>
+                    <p><strong>Skipped items:</strong> ${automatedMerge.skippedFiles.length}</p>
+                </div>
+                <div class="merge-repos">
+                    <h4>📦 Repository Results</h4>
+                    ${(automatedMerge.repositoryResults || []).map(repo => `
+                        <div class="repo-merge-item">
+                            <strong>${repo.full_name}</strong>
+                            <p>Merged files: ${repo.mergedFiles} • Risk score: ${repo.riskScore}</p>
+                            <p>Capabilities: ${(repo.capabilities || []).join(', ') || 'none detected'}</p>
+                            <p>Skipped: ${(repo.skippedFiles || []).length}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else if (fallbackInstructions) {
+            detailsHtml = `
+                <div class="merge-instructions">
+                    <h4>📋 Manual Merge Instructions</h4>
+                    <p>To complete the merge process, run the following commands locally:</p>
+                    <div class="code-block">
+                        <pre><code>${fallbackInstructions.steps.join('\n')}</code></pre>
+                        <button class="copy-btn" onclick="navigator.clipboard.writeText('${fallbackInstructions.steps.join('\\n')}')">
+                            📋 Copy Commands
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="merge-repos">
+                    <h4>📦 Repositories to Merge</h4>
+                    ${fallbackInstructions.repositories.map(repo => `
+                        <div class="repo-merge-item">
+                            <strong>${repo.name}</strong>
+                            <p>${repo.description || 'No description'}</p>
+                            <a href="${repo.clone_url}" target="_blank" class="clone-link">Clone URL</a>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
         
         resultsContent.innerHTML = `
             <div class="merge-success">
@@ -977,28 +1027,7 @@ class EnhancedCaromarApp {
                     <p><strong>Name:</strong> ${result.repository.name}</p>
                     <p><strong>URL:</strong> <a href="${result.repository.html_url}" target="_blank">${result.repository.html_url}</a></p>
                 </div>
-                
-                <div class="merge-instructions">
-                    <h4>📋 Manual Merge Instructions</h4>
-                    <p>To complete the merge process, run the following commands locally:</p>
-                    <div class="code-block">
-                        <pre><code>${result.merge_instructions.steps.join('\n')}</code></pre>
-                        <button class="copy-btn" onclick="navigator.clipboard.writeText('${result.merge_instructions.steps.join('\\n')}')">
-                            📋 Copy Commands
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="merge-repos">
-                    <h4>📦 Repositories to Merge</h4>
-                    ${result.merge_instructions.repositories.map(repo => `
-                        <div class="repo-merge-item">
-                            <strong>${repo.name}</strong>
-                            <p>${repo.description || 'No description'}</p>
-                            <a href="${repo.clone_url}" target="_blank" class="clone-link">Clone URL</a>
-                        </div>
-                    `).join('')}
-                </div>
+                ${detailsHtml}
             </div>
         `;
         

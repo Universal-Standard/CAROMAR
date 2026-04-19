@@ -6,7 +6,9 @@ const {
     isValidGitHubToken,
     sanitizeString,
     validatePagination,
-    validateSort 
+    validateSort,
+    isValidGitHubCloneUrl,
+    validateMergeRepositoryDescriptors
 } = require('../utils/validation');
 
 describe('Validation Utilities', () => {
@@ -74,6 +76,68 @@ describe('Validation Utilities', () => {
             const result = validatePagination(0, 200);
             expect(result.page).toBe(1); // min page
             expect(result.perPage).toBe(100); // max perPage
+        });
+    });
+
+    describe('isValidGitHubCloneUrl', () => {
+        it('should validate GitHub clone URLs', () => {
+            expect(isValidGitHubCloneUrl('https://github.com/octocat/hello-world.git')).toBe(true);
+            expect(isValidGitHubCloneUrl('https://github.com/octocat/hello-world')).toBe(true);
+        });
+
+        it('should reject non-GitHub or malformed clone URLs', () => {
+            expect(isValidGitHubCloneUrl('https://gitlab.com/octocat/hello-world.git')).toBe(false);
+            expect(isValidGitHubCloneUrl('ssh://github.com/octocat/hello-world.git')).toBe(false);
+            expect(isValidGitHubCloneUrl('javascript:alert(1)')).toBe(false);
+        });
+    });
+
+    describe('validateMergeRepositoryDescriptors', () => {
+        it('should validate and sanitize repository descriptors', () => {
+            const result = validateMergeRepositoryDescriptors([
+                {
+                    name: 'repo-one',
+                    full_name: 'octocat/repo-one',
+                    clone_url: 'https://github.com/octocat/repo-one.git'
+                }
+            ]);
+
+            expect(result.isValid).toBe(true);
+            expect(result.error).toBeNull();
+            expect(result.repositories).toHaveLength(1);
+            expect(result.repositories[0].name).toBe('repo-one');
+        });
+
+        it('should fail on invalid repository descriptor', () => {
+            const result = validateMergeRepositoryDescriptors([
+                {
+                    name: 'repo-one',
+                    full_name: 'octocat/repo-one',
+                    clone_url: 'https://evil.example.com/repo-one.git'
+                }
+            ]);
+
+            expect(result.isValid).toBe(false);
+            expect(result.error).toContain('invalid clone_url');
+            expect(result.repositories).toHaveLength(0);
+        });
+
+        it('should fail when repository name is duplicated', () => {
+            const result = validateMergeRepositoryDescriptors([
+                {
+                    name: 'repo-one',
+                    full_name: 'octocat/repo-one',
+                    clone_url: 'https://github.com/octocat/repo-one.git'
+                },
+                {
+                    name: 'repo-one',
+                    full_name: 'spurs/repo-one-alt',
+                    clone_url: 'https://github.com/spurs/repo-one-alt.git'
+                }
+            ]);
+
+            expect(result.isValid).toBe(false);
+            expect(result.error).toContain('duplicate name');
         });
     });
 

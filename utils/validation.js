@@ -83,7 +83,7 @@ function isValidRepoPath(repoPath) {
         return false;
     }
     // Allow only common filename/path characters
-    const repoPathRegex = /^[a-zA-Z0-9._\/-]{1,1000}$/;
+    const repoPathRegex = /^[a-zA-Z0-9._/-]{1,1000}$/;
     return repoPathRegex.test(repoPath);
 }
 
@@ -113,6 +113,80 @@ function validateSort(sort, allowedValues) {
 }
 
 /**
+ * Validate GitHub clone URL format
+ * Restricts merge inputs to HTTPS GitHub repository URLs and rejects unexpected remote targets
+ * to reduce SSRF-style risk and ensure server-side merges only operate on supported GitHub clones.
+ * @param {string} cloneUrl - Clone URL to validate
+ * @returns {boolean} - True if valid GitHub HTTPS clone URL
+ */
+function isValidGitHubCloneUrl(cloneUrl) {
+    if (!cloneUrl || typeof cloneUrl !== 'string') {
+        return false;
+    }
+
+    const gitHubCloneUrlRegex = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;
+    return gitHubCloneUrlRegex.test(cloneUrl);
+}
+
+/**
+ * Validate and sanitize repository descriptors used by merge operations
+ * @param {Array<object>} repositories - Repository descriptors from request body
+ * @returns {{isValid: boolean, repositories: Array<object>, error: string|null}}
+ */
+function validateMergeRepositoryDescriptors(repositories) {
+    if (!Array.isArray(repositories) || repositories.length === 0) {
+        return { isValid: false, repositories: [], error: 'At least one repository is required' };
+    }
+
+    const sanitizedRepositories = [];
+    const seenNames = new Set();
+    const seenFullNames = new Set();
+
+    for (let index = 0; index < repositories.length; index += 1) {
+        const repository = repositories[index] || {};
+        const sanitizedName = sanitizeString(repository.name);
+        const sanitizedFullName = sanitizeString(repository.full_name);
+        const sanitizedCloneUrl = sanitizeString(repository.clone_url);
+
+        if (!sanitizedName || !isValidRepositoryName(sanitizedName)) {
+            return { isValid: false, repositories: [], error: `Repository at index ${index} has an invalid name` };
+        }
+
+        const fullNameParts = sanitizedFullName.split('/');
+        if (
+            fullNameParts.length !== 2 ||
+            !isValidGitHubUsername(fullNameParts[0]) ||
+            !isValidRepositoryName(fullNameParts[1])
+        ) {
+            return { isValid: false, repositories: [], error: `Repository at index ${index} has an invalid full_name` };
+        }
+
+        if (!isValidGitHubCloneUrl(sanitizedCloneUrl)) {
+            return { isValid: false, repositories: [], error: `Repository at index ${index} has an invalid clone_url` };
+        }
+
+        if (seenNames.has(sanitizedName)) {
+            return { isValid: false, repositories: [], error: `Repository at index ${index} has a duplicate name` };
+        }
+
+        if (seenFullNames.has(sanitizedFullName)) {
+            return { isValid: false, repositories: [], error: `Repository at index ${index} has a duplicate full_name` };
+        }
+
+        seenNames.add(sanitizedName);
+        seenFullNames.add(sanitizedFullName);
+
+        sanitizedRepositories.push({
+            name: sanitizedName,
+            full_name: sanitizedFullName,
+            clone_url: sanitizedCloneUrl
+        });
+    }
+
+    return { isValid: true, repositories: sanitizedRepositories, error: null };
+}
+
+/**
  * Validate email format
  * @param {string} email - Email to validate
  * @returns {boolean} - True if valid
@@ -133,5 +207,7 @@ module.exports = {
     isValidRepoPath,
     validatePagination,
     validateSort,
+    isValidGitHubCloneUrl,
+    validateMergeRepositoryDescriptors,
     isValidEmail
 };

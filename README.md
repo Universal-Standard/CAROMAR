@@ -48,6 +48,8 @@ Deploy CAROMAR to Netlify with one click:
 - Combines multiple repositories into one organized repository
 - Each source repository becomes a main folder
 - Maintains separation while creating unified access
+- Fully automated server-side merge execution (no manual git steps required)
+- Repository descriptor validation (name/full_name/clone_url + duplicate detection) before merge
 - Custom naming for the merged repository
 
 ### 📊 Progress Tracking

@@ -164,9 +164,9 @@ Fork a single repository to your account.
 ```
 
 ### Create Merged Repository
-Create a new repository that will contain multiple repositories as subdirectories.
+Create a new repository and automatically merge selected repositories into subdirectories using the server-side merge engine.
 
-**Endpoint:** `POST /create-merged-repo`
+**Endpoint:** `POST /api/create-merged-repo`
 
 **Request Body:**
 ```json
@@ -190,6 +190,14 @@ Create a new repository that will contain multiple repositories as subdirectorie
 }
 ```
 
+**Validation Rules (repositories[]):**
+- `name` must be a valid GitHub repository name (`[A-Za-z0-9._-]`, max 100 chars)
+- `full_name` must match `owner/repository`
+- `clone_url` must be an HTTPS GitHub URL (`https://github.com/<owner>/<repo>[.git]`)
+- `name` and `full_name` must be unique within the request
+
+Invalid descriptors return `400` with an indexed error message (example: `Repository at index 0 has an invalid clone_url`).
+
 **Response:**
 ```json
 {
@@ -200,10 +208,29 @@ Create a new repository that will contain multiple repositories as subdirectorie
     "html_url": "https://github.com/your-username/merged-repo",
     "clone_url": "https://github.com/your-username/merged-repo.git"
   },
-  "message": "Repository created successfully",
-  "merge_instructions": {
-    "repositories": [...],
-    "steps": ["git clone ...", "cd ...", ...]
+  "message": "Repository created and merged automatically",
+  "automated_merge": {
+    "mergedFiles": 42,
+    "sourceRepositories": 2,
+    "skippedFiles": [],
+    "repositoryResults": [
+      {
+        "full_name": "owner/repo1",
+        "folder": "repo1",
+        "mergedFiles": 12,
+        "skippedFiles": [],
+        "capabilities": ["frontend", "testing"],
+        "riskScore": 0.1
+      }
+    ],
+    "aiInsights": [
+      {
+        "repository": "owner/repo1",
+        "recommendation": "Repository merged cleanly. No additional remediation required.",
+        "confidence": 0.98,
+        "riskScore": 0.1
+      }
+    ]
   }
 }
 ```

@@ -17,6 +17,7 @@ const logger = require('./utils/logger');
 const RepositoryAnalytics = require('./utils/analytics');
 const RepositoryComparison = require('./utils/comparison');
 const PerformanceMonitor = require('./utils/performance');
+const { mergeRepositoriesIntoTarget } = require('./utils/merge-automation');
 const {
     isValidGitHubUsername,
     isValidRepositoryName,
@@ -24,7 +25,8 @@ const {
     sanitizeString,
     isValidRepoPath,
     validatePagination,
-    validateSort
+    validateSort,
+    validateMergeRepositoryDescriptors
 } = require('./utils/validation');
 
 const app = express();
@@ -330,15 +332,23 @@ app.post('/api/create-merged-repo', async (req, res) => {
         if (!token || !isValidGitHubToken(token)) {
             return res.status(400).json({ error: 'Valid token is required' });
         }
+
+        const repositoryValidation = validateMergeRepositoryDescriptors(repositories);
+        if (!repositoryValidation.isValid) {
+            logger.warn('Invalid merge repository descriptors', { error: repositoryValidation.error });
+            return res.status(400).json({ error: repositoryValidation.error });
+        }
+
+        const sanitizedRepositories = repositoryValidation.repositories;
         
         description = sanitizeString(description);
 
-        logger.info('Creating merged repository', { name, repoCount: repositories.length });
+        logger.info('Creating merged repository', { name, repoCount: sanitizedRepositories.length });
 
         // Create the new repository
         const createRepoResponse = await axios.post('https://api.github.com/user/repos', {
             name,
-            description: description || `Merged repository containing: ${repositories.map(r => r.name).join(', ')}`,
+            description: description || `Merged repository containing: ${sanitizedRepositories.map(r => r.name).join(', ')}`,
             private: isPrivate,
             auto_init: true
         }, {
@@ -353,8 +363,20 @@ app.post('/api/create-merged-repo', async (req, res) => {
 
         logger.info('Merged repository created successfully', { full_name: newRepo.full_name });
 
-        // Return the created repository info and instructions for manual merge
-        // Note: Full git operations would require a more complex server setup with git installed
+        const headers = {
+            'Authorization': `token ${token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'CAROMAR-App'
+        };
+
+        const mergeSummary = await mergeRepositoriesIntoTarget({
+            axiosClient: axios,
+            headers,
+            sourceRepositories: sanitizedRepositories,
+            targetFullName: newRepo.full_name,
+            targetBranch: newRepo.default_branch || 'main'
+        });
+
         res.json({
             success: true,
             repository: {
@@ -364,22 +386,8 @@ app.post('/api/create-merged-repo', async (req, res) => {
                 clone_url: newRepo.clone_url,
                 ssh_url: newRepo.ssh_url
             },
-            message: 'Repository created successfully',
-            merge_instructions: {
-                repositories: repositories,
-                note: 'These commands are for manual execution. Always review repository names and URLs before running commands.',
-                steps: [
-                    'git clone ' + newRepo.clone_url,
-                    'cd ' + sanitizeString(newRepo.name),
-                    ...repositories.map(repo => [
-                        'mkdir "' + sanitizeString(repo.name) + '"',
-                        'cd "' + sanitizeString(repo.name) + '"',
-                        'git clone ' + repo.clone_url + ' .',
-                        'rm -rf .git',
-                        'cd ..'
-                    ]).flat()
-                ]
-            }
+            message: 'Repository created and merged automatically',
+            automated_merge: mergeSummary
         });
     } catch (error) {
         logger.error('Error creating merged repository', error);
