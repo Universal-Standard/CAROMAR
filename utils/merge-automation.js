@@ -8,6 +8,20 @@ function normalizeBase64Content(content = '') {
     return content.replace(/\n/g, '');
 }
 
+function getBase64DecodedByteLength(base64Content = '') {
+    const normalized = normalizeBase64Content(base64Content);
+    if (!normalized) {
+        return 0;
+    }
+
+    const paddingLength = normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0;
+    return Math.floor((normalized.length * 3) / 4) - paddingLength;
+}
+
+function exceedsMaxFileSize(sizeInBytes) {
+    return typeof sizeInBytes === 'number' && sizeInBytes > MAX_FILE_SIZE_BYTES;
+}
+
 function encodeContentPath(path) {
     return path
         .split('/')
@@ -82,7 +96,10 @@ async function getRepositoryTree(axiosClient, headers, sourceFullName) {
     );
 
     if (treeResponse.data?.truncated) {
-        throw new Error(`Tree listing for ${sourceFullName} is truncated by GitHub API`);
+        throw new Error(
+            `Tree listing for ${sourceFullName} is truncated by GitHub API. ` +
+            'Repository is too large for automated merge. Use manual merge or reduce repository size.'
+        );
     }
 
     const files = (treeResponse.data.tree || []).filter(item => item.type === 'blob');
@@ -119,7 +136,7 @@ async function mergeRepositoriesIntoTarget({ axiosClient, headers, sourceReposit
             for (const file of files) {
                 const targetPath = `${sourceRepository.name}/${file.path}`;
 
-                if (file.size > MAX_FILE_SIZE_BYTES) {
+                if (exceedsMaxFileSize(file.size)) {
                     const reason = `Skipped ${targetPath}: file exceeds ${MAX_FILE_SIZE_BYTES} bytes`;
                     summary.skippedFiles.push(reason);
                     repositoryResult.skippedFiles.push(reason);
@@ -131,6 +148,13 @@ async function mergeRepositoriesIntoTarget({ axiosClient, headers, sourceReposit
                         `https://api.github.com/repos/${sourceRepository.full_name}/git/blobs/${file.sha}`,
                         { headers }
                     );
+
+                    if (exceedsMaxFileSize(getBase64DecodedByteLength(blobResponse.data.content))) {
+                        const reason = `Skipped ${targetPath}: file exceeds ${MAX_FILE_SIZE_BYTES} bytes`;
+                        summary.skippedFiles.push(reason);
+                        repositoryResult.skippedFiles.push(reason);
+                        continue;
+                    }
 
                     await axiosClient.put(
                         `https://api.github.com/repos/${targetFullName}/contents/${encodeContentPath(targetPath)}`,
@@ -168,6 +192,8 @@ async function mergeRepositoriesIntoTarget({ axiosClient, headers, sourceReposit
 module.exports = {
     MAX_FILE_SIZE_BYTES,
     normalizeBase64Content,
+    getBase64DecodedByteLength,
+    exceedsMaxFileSize,
     encodeContentPath,
     getRepositoryTree,
     inferRepositoryCapabilities,

@@ -971,6 +971,7 @@ class EnhancedCaromarApp {
         const resultsContent = document.getElementById('results-content');
         const automatedMerge = result.automated_merge;
         const fallbackInstructions = result.merge_instructions;
+        const fallbackCommands = fallbackInstructions ? fallbackInstructions.steps.join('\n') : '';
 
         let detailsHtml = '';
 
@@ -1000,8 +1001,8 @@ class EnhancedCaromarApp {
                     <h4>📋 Manual Merge Instructions</h4>
                     <p>To complete the merge process, run the following commands locally:</p>
                     <div class="code-block">
-                        <pre><code>${fallbackInstructions.steps.join('\n')}</code></pre>
-                        <button class="copy-btn" onclick="navigator.clipboard.writeText('${fallbackInstructions.steps.join('\\n')}')">
+                        <pre><code id="merge-commands-code"></code></pre>
+                        <button class="copy-btn" id="copy-merge-commands-btn">
                             📋 Copy Commands
                         </button>
                     </div>
@@ -1030,6 +1031,21 @@ class EnhancedCaromarApp {
                 ${detailsHtml}
             </div>
         `;
+
+        if (fallbackInstructions) {
+            const codeElement = document.getElementById('merge-commands-code');
+            const copyButton = document.getElementById('copy-merge-commands-btn');
+
+            if (codeElement) {
+                codeElement.textContent = fallbackCommands;
+            }
+
+            if (copyButton) {
+                copyButton.addEventListener('click', () => {
+                    navigator.clipboard.writeText(fallbackCommands);
+                });
+            }
+        }
         
         resultsSection.style.display = 'block';
         resultsSection.scrollIntoView({ behavior: 'smooth' });

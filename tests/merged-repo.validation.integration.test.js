@@ -6,7 +6,7 @@ jest.mock('axios');
 const app = require('../server');
 
 describe('Merged Repository Endpoint Validation (Real Server)', () => {
-    const validToken = `ghp_${'a'.repeat(40)}`;
+    const validToken = `test_${'x'.repeat(40)}`;
 
     beforeEach(() => {
         jest.clearAllMocks();

@@ -1,6 +1,7 @@
 const {
     MAX_FILE_SIZE_BYTES,
     normalizeBase64Content,
+    getBase64DecodedByteLength,
     encodeContentPath,
     inferRepositoryCapabilities,
     computeRepositoryRiskScore,
@@ -16,6 +17,10 @@ describe('Merge Automation Utilities', () => {
 
     it('encodes nested content path safely', () => {
         expect(encodeContentPath('repo name/src/file one.js')).toBe('repo%20name/src/file%20one.js');
+    });
+
+    it('calculates decoded byte length from base64', () => {
+        expect(getBase64DecodedByteLength(Buffer.from('hello').toString('base64'))).toBe(5);
     });
 
     it('infers repository capabilities from file paths', () => {
@@ -111,5 +116,51 @@ describe('Merge Automation Utilities', () => {
         expect(result.skippedFiles.some(reason => reason.includes('blob fetch failed'))).toBe(true);
         expect(result.skippedFiles.some(reason => reason.includes('exceeds'))).toBe(true);
         expect(axiosClient.put).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips oversized blobs even when tree size is missing', async () => {
+        const oversizedContent = Buffer.alloc(MAX_FILE_SIZE_BYTES + 10, 1).toString('base64');
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: [
+                                { type: 'blob', path: 'missing-size.bin', sha: 'sha-big' }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/git/blobs/sha-big')) {
+                    return Promise.resolve({ data: { content: oversizedContent } });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            }),
+            put: jest.fn(() => Promise.resolve({ data: {} }))
+        };
+
+        const result = await mergeRepositoriesIntoTarget({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                {
+                    name: 'repo-a',
+                    full_name: 'octocat/repo-a',
+                    clone_url: 'https://github.com/octocat/repo-a.git'
+                }
+            ],
+            targetFullName: 'octocat/merged-repo',
+            targetBranch: 'main'
+        });
+
+        expect(result.mergedFiles).toBe(0);
+        expect(result.skippedFiles.some(reason => reason.includes('exceeds'))).toBe(true);
+        expect(axiosClient.put).not.toHaveBeenCalled();
     });
 });
