@@ -141,6 +141,19 @@ describe('Validation Utilities', () => {
             expect(result.error).toContain('duplicate name');
         });
 
+        it('should fail when clone_url points at a different repository', () => {
+            const result = validateMergeRepositoryDescriptors([
+                {
+                    name: 'repo-one',
+                    full_name: 'octocat/repo-one',
+                    clone_url: 'https://github.com/spurs/repo-two.git'
+                }
+            ]);
+
+            expect(result.isValid).toBe(false);
+            expect(result.error).toContain('clone_url that does not match full_name');
+        });
+
         it('should reject reserved dot-segment repository names', () => {
             const result = validateMergeRepositoryDescriptors([
                 {

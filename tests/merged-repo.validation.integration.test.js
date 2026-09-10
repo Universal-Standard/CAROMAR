@@ -78,6 +78,26 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
         expect(axios.post).not.toHaveBeenCalled();
     });
 
+    it('rejects repositories whose clone_url does not match full_name', async () => {
+        const response = await request(app)
+            .post('/api/create-merged-repo')
+            .send({
+                name: 'secure-merge',
+                token: validToken,
+                repositories: [
+                    {
+                        name: 'repo-one',
+                        full_name: 'octocat/repo-one',
+                        clone_url: 'https://github.com/spurs/repo-two.git'
+                    }
+                ]
+            });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toContain('clone_url that does not match full_name');
+        expect(axios.post).not.toHaveBeenCalled();
+    });
+
     it('rejects oversized automated merges before creating the target repository', async () => {
         axios.get.mockImplementation(url => {
             if (url === 'https://api.github.com/repos/octocat/repo-one') {

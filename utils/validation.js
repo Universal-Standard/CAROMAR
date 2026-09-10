@@ -119,11 +119,7 @@ function validateSort(sort, allowedValues) {
  * @param {string} cloneUrl - Clone URL to validate
  * @returns {boolean} - True if valid GitHub HTTPS clone URL
  */
-function isValidGitHubCloneUrl(cloneUrl) {
-    if (!cloneUrl || typeof cloneUrl !== 'string') {
-        return false;
-    }
-
+function parseGitHubCloneUrl(cloneUrl) {
     try {
         const parsedUrl = new URL(cloneUrl);
         if (
@@ -145,10 +141,25 @@ function isValidGitHubCloneUrl(cloneUrl) {
             ? repositoryNameWithSuffix.slice(0, -4)
             : repositoryNameWithSuffix;
 
-        return isValidGitHubUsername(owner) && isValidRepositoryName(repositoryName);
+        if (!isValidGitHubUsername(owner) || !isValidRepositoryName(repositoryName)) {
+            return null;
+        }
+
+        return {
+            owner,
+            repositoryName
+        };
     } catch {
+        return null;
+    }
+}
+
+function isValidGitHubCloneUrl(cloneUrl) {
+    if (!cloneUrl || typeof cloneUrl !== 'string') {
         return false;
     }
+
+    return Boolean(parseGitHubCloneUrl(cloneUrl));
 }
 
 /**
@@ -184,8 +195,13 @@ function validateMergeRepositoryDescriptors(repositories) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has an invalid full_name` };
         }
 
-        if (!isValidGitHubCloneUrl(sanitizedCloneUrl)) {
+        const cloneUrlParts = parseGitHubCloneUrl(sanitizedCloneUrl);
+        if (!cloneUrlParts) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has an invalid clone_url` };
+        }
+
+        if (`${cloneUrlParts.owner}/${cloneUrlParts.repositoryName}` !== sanitizedFullName) {
+            return { isValid: false, repositories: [], error: `Repository at index ${index} has a clone_url that does not match full_name` };
         }
 
         const normalizedName = sanitizedName.toLowerCase();
