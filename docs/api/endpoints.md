@@ -247,13 +247,6 @@ Invalid descriptors return `400` with an indexed error message (example: `Reposi
         "riskScore": 0.1
       }
     ]
-  "message": "Repository created successfully. Manual merge steps are still required.",
-  "merge_status": "pending_manual_steps",
-  "merge_instructions": {
-    "repositories": [...],
-    "note": "These commands are for manual execution. The merge is not complete until you run every step locally and commit the combined result.",
-    "interruption_note": "If you stop partway through, remove any partially cloned repository folder before retrying that repository, then continue with the remaining repositories.",
-    "steps": ["git clone ...", "cd ...", ...]
   }
 }
 ```
