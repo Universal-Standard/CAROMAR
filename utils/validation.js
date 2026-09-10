@@ -113,11 +113,11 @@ function validateSort(sort, allowedValues) {
 }
 
 /**
- * Validate GitHub clone URL format
+ * Parse and validate a GitHub HTTPS clone URL.
  * Restricts merge inputs to HTTPS GitHub repository URLs and rejects unexpected remote targets
  * to reduce SSRF-style risk and ensure server-side merges only operate on supported GitHub clones.
  * @param {string} cloneUrl - Clone URL to validate
- * @returns {boolean} - True if valid GitHub HTTPS clone URL
+ * @returns {{owner: string, repositoryName: string} | null} - Parsed owner/repo when valid, otherwise null
  */
 function parseGitHubCloneUrl(cloneUrl) {
     try {
@@ -128,12 +128,12 @@ function parseGitHubCloneUrl(cloneUrl) {
             parsedUrl.search ||
             parsedUrl.hash
         ) {
-            return false;
+            return null;
         }
 
         const pathSegments = parsedUrl.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
         if (pathSegments.length !== 2) {
-            return false;
+            return null;
         }
 
         const [owner, repositoryNameWithSuffix] = pathSegments;
