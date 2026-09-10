@@ -16,6 +16,10 @@ function getBase64DecodedByteLength(base64Content = '') {
         return 0;
     }
 
+    if (normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) {
+        return null;
+    }
+
     const paddingLength = normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0;
     return Math.floor((normalized.length * 3) / 4) - paddingLength;
 }
@@ -235,7 +239,15 @@ async function mergeRepositoriesIntoTarget({
                         continue;
                     }
 
-                    if (exceedsMaxFileSize(getBase64DecodedByteLength(blobResponse.data.content))) {
+                    const decodedByteLength = getBase64DecodedByteLength(blobResponse.data.content);
+                    if (decodedByteLength === null) {
+                        const reason = `Skipped ${targetPath}: unsupported base64 payload`;
+                        summary.skippedFiles.push(reason);
+                        repositoryResult.skippedFiles.push(reason);
+                        continue;
+                    }
+
+                    if (exceedsMaxFileSize(decodedByteLength)) {
                         const reason = `Skipped ${targetPath}: file exceeds ${MAX_FILE_SIZE_BYTES} bytes`;
                         summary.skippedFiles.push(reason);
                         repositoryResult.skippedFiles.push(reason);

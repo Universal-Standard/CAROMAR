@@ -25,6 +25,11 @@ describe('Merge Automation Utilities', () => {
         expect(getBase64DecodedByteLength(Buffer.from('hello').toString('base64'))).toBe(5);
     });
 
+    it('returns null for malformed base64 payloads', () => {
+        expect(getBase64DecodedByteLength('abc')).toBeNull();
+        expect(getBase64DecodedByteLength('YWJj*')).toBeNull();
+    });
+
     it('infers repository capabilities from file paths', () => {
         const capabilities = inferRepositoryCapabilities([
             { path: 'src/components/App.tsx' },
@@ -362,6 +367,51 @@ describe('Merge Automation Utilities', () => {
 
         expect(result.mergedFiles).toBe(0);
         expect(result.skippedFiles.some(reason => reason.includes('unsupported blob encoding utf-8'))).toBe(true);
+        expect(axiosClient.put).not.toHaveBeenCalled();
+    });
+
+    it('skips blobs returned with malformed base64 payloads', async () => {
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: [
+                                { type: 'blob', path: 'README.md', sha: 'sha-readme', size: 10, mode: '100644' }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/git/blobs/sha-readme')) {
+                    return Promise.resolve({ data: { content: 'abc', encoding: 'base64' } });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            }),
+            put: jest.fn(() => Promise.resolve({ data: {} }))
+        };
+
+        const result = await mergeRepositoriesIntoTarget({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                {
+                    name: 'repo-a',
+                    full_name: 'octocat/repo-a',
+                    clone_url: 'https://github.com/octocat/repo-a.git'
+                }
+            ],
+            targetFullName: 'octocat/merged-repo',
+            targetBranch: 'main'
+        });
+
+        expect(result.mergedFiles).toBe(0);
+        expect(result.skippedFiles.some(reason => reason.includes('unsupported base64 payload'))).toBe(true);
         expect(axiosClient.put).not.toHaveBeenCalled();
     });
 });
