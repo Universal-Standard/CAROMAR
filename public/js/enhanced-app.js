@@ -510,7 +510,12 @@ class EnhancedCaromarApp {
             return false;
         }
 
-        const [owner, name] = fullName.split('/');
+        const fullNameParts = fullName.split('/');
+        if (fullNameParts.length !== 2) {
+            return false;
+        }
+
+        const [owner, name] = fullNameParts;
         return Boolean(owner && name && this.isValidGitHubUsername(owner) && this.isValidRepositoryName(name));
     }
 
