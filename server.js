@@ -461,7 +461,22 @@ app.post('/api/create-merged-repo', async (req, res) => {
             logger.info('Merged repository created successfully', { full_name: targetRepositoryResponse.full_name });
         }
 
-        const { files: targetRepositoryFiles } = await getRepositoryTree(axios, headers, targetRepositoryResponse.full_name);
+        let targetRepositoryFiles = [];
+        let initializeTargetRepository = false;
+
+        try {
+            ({ files: targetRepositoryFiles } = await getRepositoryTree(axios, headers, targetRepositoryResponse.full_name));
+        } catch (error) {
+            if (!(target === 'existing' && error.response?.status === 409)) {
+                throw error;
+            }
+
+            initializeTargetRepository = true;
+            logger.info('Existing target repository is empty; initializing on first merged file', {
+                full_name: targetRepositoryResponse.full_name
+            });
+        }
+
         const reservedTargetPaths = targetRepositoryFiles.map(file => file.path);
         const mergeSummary = await mergeRepositoriesIntoTarget({
             axiosClient: axios,
@@ -471,7 +486,8 @@ app.post('/api/create-merged-repo', async (req, res) => {
             targetBranch: targetRepositoryResponse.default_branch || 'main',
             mergePlan,
             mergeStrategy,
-            reservedTargetPaths
+            reservedTargetPaths,
+            initializeTargetRepository
         });
 
         const mergeSubject = target === 'new' ? 'Repository created' : 'Repository updated';

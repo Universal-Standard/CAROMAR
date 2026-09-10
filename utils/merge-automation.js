@@ -202,7 +202,8 @@ async function mergeRepositoriesIntoTarget({
     targetBranch = 'main',
     mergePlan = null,
     mergeStrategy = MERGE_STRATEGIES.SUBFOLDERS,
-    reservedTargetPaths = []
+    reservedTargetPaths = [],
+    initializeTargetRepository = false
 }) {
     const summary = {
         mergedFiles: 0,
@@ -316,13 +317,18 @@ async function mergeRepositoriesIntoTarget({
                         continue;
                     }
 
+                    const createContentRequest = {
+                        message: `Merge ${sourceRepository.full_name}: add ${file.path}`,
+                        content: normalizeBase64Content(blobResponse.data.content)
+                    };
+
+                    if (!(initializeTargetRepository && summary.mergedFiles === 0)) {
+                        createContentRequest.branch = targetBranch;
+                    }
+
                     await axiosClient.put(
                         `https://api.github.com/repos/${targetFullName}/contents/${encodeContentPath(targetPath)}`,
-                        {
-                            message: `Merge ${sourceRepository.full_name}: add ${file.path}`,
-                            content: normalizeBase64Content(blobResponse.data.content),
-                            branch: targetBranch
-                        },
+                        createContentRequest,
                         { headers }
                     );
 

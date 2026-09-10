@@ -379,6 +379,90 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
         expect(axios.put).toHaveBeenCalledTimes(1);
     });
 
+    it('initializes an empty existing target repository without specifying a branch on the first file', async () => {
+        axios.get.mockImplementation(url => {
+            if (url === 'https://api.github.com/repos/octocat/repo-one') {
+                return Promise.resolve({ data: { default_branch: 'main' } });
+            }
+
+            if (url === 'https://api.github.com/repos/octocat/existing-target') {
+                return Promise.resolve({
+                    data: {
+                        name: 'existing-target',
+                        full_name: 'octocat/existing-target',
+                        html_url: 'https://github.com/octocat/existing-target',
+                        clone_url: 'https://github.com/octocat/existing-target.git',
+                        ssh_url: 'git@github.com:octocat/existing-target.git',
+                        default_branch: 'main',
+                        permissions: {
+                            push: true
+                        }
+                    }
+                });
+            }
+
+            if (url.includes('/octocat/repo-one/git/trees/main?recursive=1')) {
+                return Promise.resolve({
+                    data: {
+                        truncated: false,
+                        tree: [
+                            { type: 'blob', path: 'README.md', sha: 'blob-sha', size: 20, mode: '100644' }
+                        ]
+                    }
+                });
+            }
+
+            if (url.includes('/octocat/existing-target/git/trees/main?recursive=1')) {
+                const error = new Error('Git Repository is empty.');
+                error.response = {
+                    status: 409,
+                    data: {
+                        message: 'Git Repository is empty.'
+                    }
+                };
+
+                return Promise.reject(error);
+            }
+
+            if (url.includes('/git/blobs/blob-sha')) {
+                return Promise.resolve({ data: { content: Buffer.from('hello').toString('base64'), encoding: 'base64' } });
+            }
+
+            throw new Error(`Unexpected axios.get URL in test: ${url}`);
+        });
+
+        axios.put.mockResolvedValue({ data: { content: { path: 'README.md' } } });
+
+        const response = await request(app)
+            .post('/api/create-merged-repo')
+            .send({
+                target: 'existing',
+                target_repository: 'octocat/existing-target',
+                merge_strategy: 'cohesive',
+                token: validToken,
+                repositories: [
+                    {
+                        name: 'repo-one',
+                        full_name: 'octocat/repo-one',
+                        clone_url: 'https://github.com/octocat/repo-one.git'
+                    }
+                ]
+            });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.success).toBe(true);
+        expect(axios.put).toHaveBeenCalledTimes(1);
+        expect(axios.put).toHaveBeenCalledWith(
+            'https://api.github.com/repos/octocat/existing-target/contents/README.md',
+            expect.objectContaining({
+                message: 'Merge octocat/repo-one: add README.md',
+                content: Buffer.from('hello').toString('base64')
+            }),
+            expect.any(Object)
+        );
+        expect(axios.put.mock.calls[0][1]).not.toHaveProperty('branch');
+    });
+
     it('rejects merging into an existing repository without write permissions', async () => {
         axios.get.mockImplementation(url => {
             if (url === 'https://api.github.com/repos/octocat/existing-target') {
