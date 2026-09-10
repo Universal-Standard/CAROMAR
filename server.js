@@ -17,7 +17,11 @@ const logger = require('./utils/logger');
 const RepositoryAnalytics = require('./utils/analytics');
 const RepositoryComparison = require('./utils/comparison');
 const PerformanceMonitor = require('./utils/performance');
-const { mergeRepositoriesIntoTarget } = require('./utils/merge-automation');
+const {
+    buildMergePlan,
+    mergeRepositoriesIntoTarget,
+    isRateLimitExceededError
+} = require('./utils/merge-automation');
 const {
     isValidGitHubUsername,
     isValidRepositoryName,
@@ -343,6 +347,18 @@ app.post('/api/create-merged-repo', async (req, res) => {
         
         description = sanitizeString(description);
 
+        const headers = {
+            'Authorization': `token ${token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'CAROMAR-App'
+        };
+
+        const mergePlan = await buildMergePlan({
+            axiosClient: axios,
+            headers,
+            sourceRepositories: sanitizedRepositories
+        });
+
         logger.info('Creating merged repository', { name, repoCount: sanitizedRepositories.length });
 
         // Create the new repository
@@ -352,29 +368,20 @@ app.post('/api/create-merged-repo', async (req, res) => {
             private: isPrivate,
             auto_init: true
         }, {
-            headers: {
-                'Authorization': `token ${token}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'CAROMAR-App'
-            }
+            headers
         });
 
         const newRepo = createRepoResponse.data;
 
         logger.info('Merged repository created successfully', { full_name: newRepo.full_name });
 
-        const headers = {
-            'Authorization': `token ${token}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'CAROMAR-App'
-        };
-
         const mergeSummary = await mergeRepositoriesIntoTarget({
             axiosClient: axios,
             headers,
             sourceRepositories: sanitizedRepositories,
             targetFullName: newRepo.full_name,
-            targetBranch: newRepo.default_branch || 'main'
+            targetBranch: newRepo.default_branch || 'main',
+            mergePlan
         });
 
         res.json({
@@ -392,7 +399,19 @@ app.post('/api/create-merged-repo', async (req, res) => {
     } catch (error) {
         logger.error('Error creating merged repository', error);
         
-        if (error.response?.status === 422) {
+        if (error.statusCode) {
+            res.status(error.statusCode).json({
+                error: 'Unable to merge the selected repositories automatically',
+                details: error.message
+            });
+        } else if (isRateLimitExceededError(error)) {
+            res.status(429).json({
+                error: 'GitHub API rate limit exceeded',
+                reset_time: error.response?.headers?.['x-ratelimit-reset']
+                    ? new Date(error.response.headers['x-ratelimit-reset'] * 1000)
+                    : null
+            });
+        } else if (error.response?.status === 422) {
             res.status(422).json({ 
                 error: 'Repository name already exists or is invalid',
                 details: error.response?.data?.message || error.message

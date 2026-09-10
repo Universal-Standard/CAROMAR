@@ -89,6 +89,7 @@ describe('Validation Utilities', () => {
             expect(isValidGitHubCloneUrl('https://gitlab.com/octocat/hello-world.git')).toBe(false);
             expect(isValidGitHubCloneUrl('ssh://github.com/octocat/hello-world.git')).toBe(false);
             expect(isValidGitHubCloneUrl('javascript:alert(1)')).toBe(false);
+            expect(isValidGitHubCloneUrl('https://github.com/octo_cat/hello-world.git')).toBe(false);
         });
     });
 
@@ -133,6 +134,37 @@ describe('Validation Utilities', () => {
                     name: 'repo-one',
                     full_name: 'spurs/repo-one-alt',
                     clone_url: 'https://github.com/spurs/repo-one-alt.git'
+                }
+            ]);
+
+            expect(result.isValid).toBe(false);
+            expect(result.error).toContain('duplicate name');
+        });
+
+        it('should reject reserved dot-segment repository names', () => {
+            const result = validateMergeRepositoryDescriptors([
+                {
+                    name: '.',
+                    full_name: 'octocat/repo-one',
+                    clone_url: 'https://github.com/octocat/repo-one.git'
+                }
+            ]);
+
+            expect(result.isValid).toBe(false);
+            expect(result.error).toContain('invalid name');
+        });
+
+        it('should fail when repository names differ only by case', () => {
+            const result = validateMergeRepositoryDescriptors([
+                {
+                    name: 'Repo-One',
+                    full_name: 'octocat/repo-one',
+                    clone_url: 'https://github.com/octocat/repo-one.git'
+                },
+                {
+                    name: 'repo-one',
+                    full_name: 'spurs/repo-two',
+                    clone_url: 'https://github.com/spurs/repo-two.git'
                 }
             ]);
 

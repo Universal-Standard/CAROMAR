@@ -1,7 +1,9 @@
 const {
     MAX_FILE_SIZE_BYTES,
+    MAX_MERGE_FILES,
     normalizeBase64Content,
     getBase64DecodedByteLength,
+    buildMergePlan,
     encodeContentPath,
     inferRepositoryCapabilities,
     computeRepositoryRiskScore,
@@ -11,8 +13,8 @@ const {
 } = require('../utils/merge-automation');
 
 describe('Merge Automation Utilities', () => {
-    it('normalizes base64 content by removing new lines', () => {
-        expect(normalizeBase64Content('YWJj\nZGVm')).toBe('YWJjZGVm');
+    it('normalizes base64 content by removing line breaks and whitespace', () => {
+        expect(normalizeBase64Content('YWJj\r\nZ GVm\n')).toBe('YWJjZGVm');
     });
 
     it('encodes nested content path safely', () => {
@@ -63,6 +65,50 @@ describe('Merge Automation Utilities', () => {
 
         await expect(getRepositoryTree(axiosClient, {}, 'octocat/repo-a'))
             .rejects.toThrow('truncated');
+    });
+
+    it('fails planning when the total merge file count exceeds the budget', async () => {
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a' || url === 'https://api.github.com/repos/octocat/repo-b') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/octocat/repo-a/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: Array.from({ length: MAX_MERGE_FILES }, (_, index) => ({
+                                type: 'blob',
+                                path: `file-${index}.txt`,
+                                sha: `sha-a-${index}`,
+                                size: 1
+                            }))
+                        }
+                    });
+                }
+
+                if (url.includes('/octocat/repo-b/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: [
+                                { type: 'blob', path: 'overflow.txt', sha: 'sha-overflow', size: 1 }
+                            ]
+                        }
+                    });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            })
+        };
+
+        await expect(buildMergePlan({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                { name: 'repo-a', full_name: 'octocat/repo-a' },
+                { name: 'repo-b', full_name: 'octocat/repo-b' }
+            ]
+        })).rejects.toThrow(`at most ${MAX_MERGE_FILES} files`);
     });
 
     it('continues merging remaining files when one file fails', async () => {
@@ -162,5 +208,115 @@ describe('Merge Automation Utilities', () => {
         expect(result.mergedFiles).toBe(0);
         expect(result.skippedFiles.some(reason => reason.includes('exceeds'))).toBe(true);
         expect(axiosClient.put).not.toHaveBeenCalled();
+    });
+
+    it('aborts remaining work after a GitHub rate-limit response', async () => {
+        const rateLimitError = new Error('API rate limit exceeded');
+        rateLimitError.response = {
+            status: 403,
+            headers: {
+                'x-ratelimit-remaining': '0',
+                'x-ratelimit-reset': '1735689600'
+            },
+            data: {
+                message: 'API rate limit exceeded'
+            }
+        };
+
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: [
+                                { type: 'blob', path: 'README.md', sha: 'sha-1', size: 10 },
+                                { type: 'blob', path: 'SECOND.md', sha: 'sha-2', size: 10 }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/git/blobs/sha-1')) {
+                    return Promise.reject(rateLimitError);
+                }
+
+                if (url.includes('/git/blobs/sha-2')) {
+                    return Promise.resolve({ data: { content: Buffer.from('ok').toString('base64') } });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            }),
+            put: jest.fn(() => Promise.resolve({ data: {} }))
+        };
+
+        const result = await mergeRepositoriesIntoTarget({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                {
+                    name: 'repo-a',
+                    full_name: 'octocat/repo-a',
+                    clone_url: 'https://github.com/octocat/repo-a.git'
+                }
+            ],
+            targetFullName: 'octocat/merged-repo',
+            targetBranch: 'main'
+        });
+
+        expect(result.aborted).toBe(true);
+        expect(result.abortReason).toContain('rate limit exhausted');
+        expect(result.mergedFiles).toBe(0);
+        expect(axiosClient.put).not.toHaveBeenCalled();
+        expect(axiosClient.get).not.toHaveBeenCalledWith(expect.stringContaining('/git/blobs/sha-2'));
+    });
+
+    it('skips unsupported git blob modes that cannot be recreated via contents API', async () => {
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: [
+                                { type: 'blob', path: 'bin/run.sh', sha: 'sha-run', size: 12, mode: '100755' },
+                                { type: 'blob', path: 'README.md', sha: 'sha-readme', size: 10, mode: '100644' }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/git/blobs/sha-readme')) {
+                    return Promise.resolve({ data: { content: Buffer.from('hello').toString('base64') } });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            }),
+            put: jest.fn(() => Promise.resolve({ data: {} }))
+        };
+
+        const result = await mergeRepositoriesIntoTarget({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                {
+                    name: 'repo-a',
+                    full_name: 'octocat/repo-a',
+                    clone_url: 'https://github.com/octocat/repo-a.git'
+                }
+            ],
+            targetFullName: 'octocat/merged-repo',
+            targetBranch: 'main'
+        });
+
+        expect(result.mergedFiles).toBe(1);
+        expect(result.skippedFiles.some(reason => reason.includes('unsupported git mode 100755'))).toBe(true);
+        expect(axiosClient.put).toHaveBeenCalledTimes(1);
     });
 });

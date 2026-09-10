@@ -3,9 +3,11 @@
  */
 
 const MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1 MB safety limit per file
+const MAX_MERGE_FILES = 250;
+const SUPPORTED_CONTENTS_FILE_MODE = '100644';
 
 function normalizeBase64Content(content = '') {
-    return content.replace(/\n/g, '');
+    return content.replace(/\s+/g, '');
 }
 
 function getBase64DecodedByteLength(base64Content = '') {
@@ -27,6 +29,60 @@ function encodeContentPath(path) {
         .split('/')
         .map(segment => encodeURIComponent(segment))
         .join('/');
+}
+
+function createMergeLimitError(message) {
+    const error = new Error(message);
+    error.statusCode = 400;
+    return error;
+}
+
+function isRateLimitExceededError(error) {
+    return error.response?.status === 403 && String(error.response?.headers?.['x-ratelimit-remaining']) === '0';
+}
+
+function getRateLimitAbortReason(error) {
+    if (!isRateLimitExceededError(error)) {
+        return null;
+    }
+
+    const resetAt = error.response?.headers?.['x-ratelimit-reset'];
+    const resetMessage = resetAt
+        ? ` Rate limit resets at ${new Date(Number(resetAt) * 1000).toISOString()}.`
+        : '';
+
+    return `Aborted automated merge: GitHub API rate limit exhausted.${resetMessage}`;
+}
+
+function isSupportedContentsMode(mode) {
+    return !mode || mode === SUPPORTED_CONTENTS_FILE_MODE;
+}
+
+async function buildMergePlan({ axiosClient, headers, sourceRepositories }) {
+    const repositories = [];
+    let totalFiles = 0;
+
+    for (const sourceRepository of sourceRepositories) {
+        const { files } = await getRepositoryTree(axiosClient, headers, sourceRepository.full_name);
+        totalFiles += files.length;
+
+        if (totalFiles > MAX_MERGE_FILES) {
+            throw createMergeLimitError(
+                `Automated merge supports at most ${MAX_MERGE_FILES} files per request. ` +
+                `The selected repositories contain ${totalFiles} files.`
+            );
+        }
+
+        repositories.push({
+            sourceRepository,
+            files
+        });
+    }
+
+    return {
+        totalFiles,
+        repositories
+    };
 }
 
 function inferRepositoryCapabilities(files) {
@@ -96,7 +152,7 @@ async function getRepositoryTree(axiosClient, headers, sourceFullName) {
     );
 
     if (treeResponse.data?.truncated) {
-        throw new Error(
+        throw createMergeLimitError(
             `Tree listing for ${sourceFullName} is truncated by GitHub API. ` +
             'Repository is too large for automated merge. Use manual merge or reduce repository size.'
         );
@@ -110,16 +166,32 @@ async function getRepositoryTree(axiosClient, headers, sourceFullName) {
     };
 }
 
-async function mergeRepositoriesIntoTarget({ axiosClient, headers, sourceRepositories, targetFullName, targetBranch = 'main' }) {
+async function mergeRepositoriesIntoTarget({
+    axiosClient,
+    headers,
+    sourceRepositories,
+    targetFullName,
+    targetBranch = 'main',
+    mergePlan = null
+}) {
     const summary = {
         mergedFiles: 0,
         skippedFiles: [],
         sourceRepositories: sourceRepositories.length,
         repositoryResults: [],
-        aiInsights: []
+        aiInsights: [],
+        aborted: false,
+        abortReason: null
     };
 
-    for (const sourceRepository of sourceRepositories) {
+    const plannedRepositories = mergePlan?.repositories || (await buildMergePlan({
+        axiosClient,
+        headers,
+        sourceRepositories
+    })).repositories;
+
+    for (const plannedRepository of plannedRepositories) {
+        const sourceRepository = plannedRepository.sourceRepository;
         const repositoryResult = {
             full_name: sourceRepository.full_name,
             folder: sourceRepository.name,
@@ -130,11 +202,18 @@ async function mergeRepositoriesIntoTarget({ axiosClient, headers, sourceReposit
         };
 
         try {
-            const { files } = await getRepositoryTree(axiosClient, headers, sourceRepository.full_name);
+            const files = plannedRepository.files;
             repositoryResult.capabilities = inferRepositoryCapabilities(files);
 
             for (const file of files) {
                 const targetPath = `${sourceRepository.name}/${file.path}`;
+
+                if (!isSupportedContentsMode(file.mode)) {
+                    const reason = `Skipped ${targetPath}: unsupported git mode ${file.mode}`;
+                    summary.skippedFiles.push(reason);
+                    repositoryResult.skippedFiles.push(reason);
+                    continue;
+                }
 
                 if (exceedsMaxFileSize(file.size)) {
                     const reason = `Skipped ${targetPath}: file exceeds ${MAX_FILE_SIZE_BYTES} bytes`;
@@ -169,19 +248,40 @@ async function mergeRepositoriesIntoTarget({ axiosClient, headers, sourceReposit
                     summary.mergedFiles += 1;
                     repositoryResult.mergedFiles += 1;
                 } catch (error) {
+                    const abortReason = getRateLimitAbortReason(error);
+                    if (abortReason) {
+                        summary.aborted = true;
+                        summary.abortReason = abortReason;
+                        summary.skippedFiles.push(abortReason);
+                        repositoryResult.skippedFiles.push(abortReason);
+                        break;
+                    }
+
                     const reason = `Skipped ${targetPath}: ${error.response?.data?.message || error.message}`;
                     summary.skippedFiles.push(reason);
                     repositoryResult.skippedFiles.push(reason);
                 }
             }
         } catch (error) {
-            const reason = `Failed merging ${sourceRepository.full_name}: ${error.response?.data?.message || error.message}`;
-            summary.skippedFiles.push(reason);
-            repositoryResult.skippedFiles.push(reason);
+            const abortReason = getRateLimitAbortReason(error);
+            if (abortReason) {
+                summary.aborted = true;
+                summary.abortReason = abortReason;
+                summary.skippedFiles.push(abortReason);
+                repositoryResult.skippedFiles.push(abortReason);
+            } else {
+                const reason = `Failed merging ${sourceRepository.full_name}: ${error.response?.data?.message || error.message}`;
+                summary.skippedFiles.push(reason);
+                repositoryResult.skippedFiles.push(reason);
+            }
         }
 
         repositoryResult.riskScore = computeRepositoryRiskScore(repositoryResult);
         summary.repositoryResults.push(repositoryResult);
+
+        if (summary.aborted) {
+            break;
+        }
     }
 
     summary.aiInsights = generateAIMergeInsights(summary.repositoryResults);
@@ -191,13 +291,16 @@ async function mergeRepositoriesIntoTarget({ axiosClient, headers, sourceReposit
 
 module.exports = {
     MAX_FILE_SIZE_BYTES,
+    MAX_MERGE_FILES,
     normalizeBase64Content,
     getBase64DecodedByteLength,
     exceedsMaxFileSize,
     encodeContentPath,
     getRepositoryTree,
+    buildMergePlan,
     inferRepositoryCapabilities,
     computeRepositoryRiskScore,
     generateAIMergeInsights,
-    mergeRepositoriesIntoTarget
+    mergeRepositoriesIntoTarget,
+    isRateLimitExceededError
 };

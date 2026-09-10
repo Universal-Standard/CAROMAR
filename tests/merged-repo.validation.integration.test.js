@@ -1,5 +1,6 @@
 const request = require('supertest');
 const axios = require('axios');
+const { MAX_MERGE_FILES } = require('../utils/merge-automation');
 
 jest.mock('axios');
 
@@ -54,6 +55,69 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
 
         expect(response.statusCode).toBe(400);
         expect(response.body.error).toContain('duplicate name');
+        expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('rejects reserved dot-segment repository names', async () => {
+        const response = await request(app)
+            .post('/api/create-merged-repo')
+            .send({
+                name: 'secure-merge',
+                token: validToken,
+                repositories: [
+                    {
+                        name: '..',
+                        full_name: 'octocat/unsafe-repo',
+                        clone_url: 'https://github.com/octocat/unsafe-repo.git'
+                    }
+                ]
+            });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toContain('invalid name');
+        expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('rejects oversized automated merges before creating the target repository', async () => {
+        axios.get.mockImplementation(url => {
+            if (url === 'https://api.github.com/repos/octocat/repo-one') {
+                return Promise.resolve({ data: { default_branch: 'main' } });
+            }
+
+            if (url.includes('/git/trees/main?recursive=1')) {
+                return Promise.resolve({
+                    data: {
+                        truncated: false,
+                        tree: Array.from({ length: MAX_MERGE_FILES + 1 }, (_, index) => ({
+                            type: 'blob',
+                            path: `file-${index}.txt`,
+                            sha: `sha-${index}`,
+                            size: 20
+                        }))
+                    }
+                });
+            }
+
+            throw new Error(`Unexpected axios.get URL in test: ${url}`);
+        });
+
+        const response = await request(app)
+            .post('/api/create-merged-repo')
+            .send({
+                name: 'secure-merge',
+                token: validToken,
+                repositories: [
+                    {
+                        name: 'repo-one',
+                        full_name: 'octocat/repo-one',
+                        clone_url: 'https://github.com/octocat/repo-one.git'
+                    }
+                ]
+            });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toContain('Unable to merge');
+        expect(response.body.details).toContain(`at most ${MAX_MERGE_FILES} files`);
         expect(axios.post).not.toHaveBeenCalled();
     });
 

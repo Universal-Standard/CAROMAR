@@ -982,6 +982,7 @@ class EnhancedCaromarApp {
                     <p><strong>Total merged files:</strong> ${automatedMerge.mergedFiles}</p>
                     <p><strong>Source repositories:</strong> ${automatedMerge.sourceRepositories}</p>
                     <p><strong>Skipped items:</strong> ${automatedMerge.skippedFiles.length}</p>
+                    ${automatedMerge.aborted ? `<p><strong>Merge stopped early:</strong> ${automatedMerge.abortReason}</p>` : ''}
                 </div>
                 <div class="merge-repos">
                     <h4>📦 Repository Results</h4>
@@ -1014,7 +1015,7 @@ class EnhancedCaromarApp {
                         <div class="repo-merge-item">
                             <strong>${repo.name}</strong>
                             <p>${repo.description || 'No description'}</p>
-                            <a href="${repo.clone_url}" target="_blank" class="clone-link">Clone URL</a>
+                            <a href="${repo.clone_url}" target="_blank" rel="noopener noreferrer" class="clone-link">Clone URL</a>
                         </div>
                     `).join('')}
                 </div>
@@ -1026,7 +1027,7 @@ class EnhancedCaromarApp {
                 <div class="summary-card">
                     <h3>✅ Repository Created Successfully</h3>
                     <p><strong>Name:</strong> ${result.repository.name}</p>
-                    <p><strong>URL:</strong> <a href="${result.repository.html_url}" target="_blank">${result.repository.html_url}</a></p>
+                    <p><strong>URL:</strong> <a href="${result.repository.html_url}" target="_blank" rel="noopener noreferrer">${result.repository.html_url}</a></p>
                 </div>
                 ${detailsHtml}
             </div>

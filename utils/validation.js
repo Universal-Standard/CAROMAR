@@ -124,8 +124,31 @@ function isValidGitHubCloneUrl(cloneUrl) {
         return false;
     }
 
-    const gitHubCloneUrlRegex = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;
-    return gitHubCloneUrlRegex.test(cloneUrl);
+    try {
+        const parsedUrl = new URL(cloneUrl);
+        if (
+            parsedUrl.protocol !== 'https:' ||
+            parsedUrl.hostname !== 'github.com' ||
+            parsedUrl.search ||
+            parsedUrl.hash
+        ) {
+            return false;
+        }
+
+        const pathSegments = parsedUrl.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+        if (pathSegments.length !== 2) {
+            return false;
+        }
+
+        const [owner, repositoryNameWithSuffix] = pathSegments;
+        const repositoryName = repositoryNameWithSuffix.endsWith('.git')
+            ? repositoryNameWithSuffix.slice(0, -4)
+            : repositoryNameWithSuffix;
+
+        return isValidGitHubUsername(owner) && isValidRepositoryName(repositoryName);
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -148,7 +171,7 @@ function validateMergeRepositoryDescriptors(repositories) {
         const sanitizedFullName = sanitizeString(repository.full_name);
         const sanitizedCloneUrl = sanitizeString(repository.clone_url);
 
-        if (!sanitizedName || !isValidRepositoryName(sanitizedName)) {
+        if (!sanitizedName || !isValidRepositoryName(sanitizedName) || sanitizedName === '.' || sanitizedName === '..') {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has an invalid name` };
         }
 
@@ -165,7 +188,9 @@ function validateMergeRepositoryDescriptors(repositories) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has an invalid clone_url` };
         }
 
-        if (seenNames.has(sanitizedName)) {
+        const normalizedName = sanitizedName.toLowerCase();
+
+        if (seenNames.has(normalizedName)) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has a duplicate name` };
         }
 
@@ -173,7 +198,7 @@ function validateMergeRepositoryDescriptors(repositories) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has a duplicate full_name` };
         }
 
-        seenNames.add(sanitizedName);
+        seenNames.add(normalizedName);
         seenFullNames.add(sanitizedFullName);
 
         sanitizedRepositories.push({
