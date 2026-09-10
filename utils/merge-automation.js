@@ -225,9 +225,14 @@ async function mergeRepositoriesIntoTarget({
         const primaryPath = mergeStrategy === MERGE_STRATEGIES.COHESIVE
             ? sourcePath
             : `${sourceRepositoryName}/${sourcePath}`;
+        const hasPathConflict = candidatePath => [...usedTargetPaths].some(path =>
+            path === candidatePath ||
+            path.startsWith(`${candidatePath}/`) ||
+            candidatePath.startsWith(`${path}/`)
+        );
         const normalizedPrimaryPath = primaryPath.toLowerCase();
 
-        if (!usedTargetPaths.has(normalizedPrimaryPath)) {
+        if (!hasPathConflict(normalizedPrimaryPath)) {
             usedTargetPaths.add(normalizedPrimaryPath);
             return primaryPath;
         }
@@ -235,7 +240,7 @@ async function mergeRepositoriesIntoTarget({
         if (mergeStrategy === MERGE_STRATEGIES.COHESIVE) {
             const fallbackPath = `${sourceRepositoryName}/${sourcePath}`;
             const normalizedFallbackPath = fallbackPath.toLowerCase();
-            if (!usedTargetPaths.has(normalizedFallbackPath)) {
+            if (!hasPathConflict(normalizedFallbackPath)) {
                 usedTargetPaths.add(normalizedFallbackPath);
                 return fallbackPath;
             }
