@@ -341,20 +341,6 @@ class EnhancedCaromarApp {
     }
 
     /**
-     * Escape text for safe HTML rendering.
-     * @param {string} value - Text to escape
-     * @returns {string} Escaped text
-     */
-    escapeHtml(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    /**
      * Allow only safe HTTPS URLs for external links.
      * @param {string} value - URL to validate
      * @returns {string} Safe URL string or '#'
@@ -1129,8 +1115,7 @@ class EnhancedCaromarApp {
             const result = await response.json();
             
             if (response.ok) {
-                this.updateProgress(100, 'Merge completed successfully!');
-                this.updateProgress(100, 'Repository created. Complete the manual merge steps locally.');
+                this.updateProgress(100, result.message || 'Merge completed successfully!');
                 this.showMergeInstructions(result);
             } else {
                 throw new Error(result.error || 'Failed to merge repositories');
@@ -1147,36 +1132,38 @@ class EnhancedCaromarApp {
         const automatedMerge = result.automated_merge;
         const fallbackInstructions = result.merge_instructions;
         const fallbackCommands = fallbackInstructions ? fallbackInstructions.steps.join('\n') : '';
+        const safeRepoName = this.escapeHtml(result.repository?.name || '');
+        const safeRepoUrl = this.sanitizeLink(result.repository?.html_url || '');
+        const safeRepoUrlLabel = this.escapeHtml(result.repository?.html_url || '');
+        const escapedMessage = this.escapeHtml(result.message || '');
+        const hasSkippedFiles = Boolean(automatedMerge?.skippedFiles?.length);
+        const isAborted = Boolean(automatedMerge?.aborted);
+        const isPartialResult = Boolean(automatedMerge && (isAborted || hasSkippedFiles));
+        let heading = '✅ Merge Completed Successfully';
+        let statusBadge = '<span class="status-badge success">Automatic merge complete</span>';
         let detailsHtml = '';
 
         if (automatedMerge) {
+            if (isAborted) {
+                heading = '⚠️ Merge Stopped Early';
+                statusBadge = '<span class="status-badge warning">Merge stopped early</span>';
+            } else if (hasSkippedFiles) {
+                heading = '⚠️ Merge Completed with Warnings';
+                statusBadge = '<span class="status-badge warning">Merge completed with warnings</span>';
+            }
+
             detailsHtml = `
                 <div class="merge-instructions">
                     <h4>🤖 Automated Merge Summary</h4>
                     <p><strong>Total merged files:</strong> ${automatedMerge.mergedFiles}</p>
                     <p><strong>Source repositories:</strong> ${automatedMerge.sourceRepositories}</p>
                     <p><strong>Skipped items:</strong> ${automatedMerge.skippedFiles.length}</p>
-                    ${automatedMerge.skippedFiles.length > 0 ? `
+                    ${hasSkippedFiles ? `
                         <ul class="merge-skipped-items">
                             ${automatedMerge.skippedFiles.map(reason => `<li>${this.escapeHtml(reason)}</li>`).join('')}
                         </ul>
                     ` : ''}
-                    ${automatedMerge.aborted ? `<p><strong>Merge stopped early:</strong> ${this.escapeHtml(automatedMerge.abortReason)}</p>` : ''}
-        const mergeSteps = result.merge_instructions.steps.join('\n');
-        const escapedName = this.escapeHtml(result.repository.name);
-        const safeRepositoryUrl = this.getSafeExternalUrl(result.repository.html_url);
-        const escapedRepositoryUrl = this.escapeHtml(safeRepositoryUrl);
-        const escapedMessage = this.escapeHtml(result.message);
-        const escapedNote = this.escapeHtml(result.merge_instructions.note);
-        const escapedInterruptionNote = this.escapeHtml(result.merge_instructions.interruption_note);
-        
-        resultsContent.innerHTML = `
-            <div class="merge-success">
-                <div class="summary-card">
-                    <h3>✅ Repository Created — Merge Still Pending</h3>
-                    <p><strong>Name:</strong> ${escapedName}</p>
-                    <p><strong>URL:</strong> <a href="${escapedRepositoryUrl}" target="_blank" rel="noopener noreferrer">${escapedRepositoryUrl}</a></p>
-                    <p>${escapedMessage}</p>
+                    ${isAborted ? `<p><strong>Merge stopped early:</strong> ${this.escapeHtml(automatedMerge.abortReason)}</p>` : ''}
                 </div>
                 <div class="merge-repos">
                     <h4>📦 Repository Results</h4>
@@ -1191,6 +1178,11 @@ class EnhancedCaromarApp {
                 </div>
             `;
         } else if (fallbackInstructions) {
+            const escapedNote = this.escapeHtml(fallbackInstructions.note || '');
+            const escapedInterruptionNote = this.escapeHtml(fallbackInstructions.interruption_note || '');
+
+            heading = '✅ Repository Created — Merge Still Pending';
+            statusBadge = '<span class="status-badge warning">Manual steps required</span>';
             detailsHtml = `
                 <div class="merge-instructions">
                     <h4>📋 Manual Merge Instructions</h4>
@@ -1198,45 +1190,36 @@ class EnhancedCaromarApp {
                     <p>${escapedInterruptionNote}</p>
                     <div class="code-block">
                         <pre><code id="merge-commands-code"></code></pre>
-                        <button class="copy-btn" id="copy-merge-commands-btn">
-                        <pre><code class="merge-command-list"></code></pre>
-                        <button class="copy-btn" type="button">
+                        <button class="copy-btn" id="copy-merge-commands-btn" type="button">
                             📋 Copy Commands
                         </button>
                     </div>
                 </div>
-                
                 <div class="merge-repos">
                     <h4>📦 Repositories to Merge</h4>
-                    ${fallbackInstructions.repositories.map(repo => `
-                        <div class="repo-merge-item">
-                            <strong>${this.escapeHtml(repo.name)}</strong>
-                            <p>${this.escapeHtml(repo.description || 'No description')}</p>
-                            <a href="${this.sanitizeLink(repo.clone_url)}" target="_blank" rel="noopener noreferrer" class="clone-link">Clone URL</a>
-                        </div>
                     <ul class="merge-repo-list">
-                        ${result.merge_instructions.repositories.map(repo => `
-                        <li class="repo-merge-item">
-                            <strong>${this.escapeHtml(repo.name)}</strong>
-                            <p>${this.escapeHtml(repo.description || 'No description')}</p>
-                            <a href="${this.escapeHtml(this.getSafeExternalUrl(repo.clone_url))}" target="_blank" rel="noopener noreferrer" class="clone-link">Clone URL</a>
-                        </li>
-                    `).join('')}
+                        ${fallbackInstructions.repositories.map(repo => `
+                            <li class="repo-merge-item">
+                                <strong>${this.escapeHtml(repo.name)}</strong>
+                                <p>${this.escapeHtml(repo.description || 'No description')}</p>
+                                <a href="${this.sanitizeLink(repo.clone_url)}" target="_blank" rel="noopener noreferrer" class="clone-link">Clone URL</a>
+                            </li>
+                        `).join('')}
                     </ul>
                 </div>
             `;
+        } else if (result.message) {
+            statusBadge = `<span class="status-badge ${isPartialResult ? 'warning' : 'success'}">${isPartialResult ? 'Review merge details' : 'Completed'}</span>`;
         }
-        
-        const safeRepoName = this.escapeHtml(result.repository?.name || '');
-        const safeRepoUrl = this.sanitizeLink(result.repository?.html_url || '');
-        const safeRepoUrlLabel = this.escapeHtml(result.repository?.html_url || '');
 
         resultsContent.innerHTML = `
             <div class="merge-success">
                 <div class="summary-card">
-                    <h3>✅ Merge Completed Successfully</h3>
+                    <h3>${heading}</h3>
+                    <p>${statusBadge}</p>
                     <p><strong>Name:</strong> ${safeRepoName}</p>
                     <p><strong>URL:</strong> <a href="${safeRepoUrl}" target="_blank" rel="noopener noreferrer">${safeRepoUrlLabel}</a></p>
+                    <p>${escapedMessage}</p>
                 </div>
                 ${detailsHtml}
             </div>
@@ -1251,27 +1234,17 @@ class EnhancedCaromarApp {
             }
 
             if (copyButton) {
-                copyButton.addEventListener('click', () => {
-                    navigator.clipboard.writeText(fallbackCommands);
+                copyButton.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(fallbackCommands);
+                        this.showSuccess('Merge commands copied to clipboard');
+                    } catch {
+                        this.showError('Failed to copy merge commands');
+                    }
                 });
             }
-        const mergeStepsElement = resultsContent.querySelector('.merge-command-list');
-        if (mergeStepsElement) {
-            mergeStepsElement.textContent = mergeSteps;
         }
 
-        const copyButton = resultsContent.querySelector('.copy-btn');
-        if (copyButton) {
-            copyButton.addEventListener('click', async () => {
-                try {
-                    await navigator.clipboard.writeText(mergeSteps);
-                    this.showSuccess('Merge commands copied to clipboard');
-                } catch {
-                    this.showError('Failed to copy merge commands');
-                }
-            });
-        }
-        
         resultsSection.style.display = 'block';
         resultsSection.scrollIntoView({ behavior: 'smooth' });
     }

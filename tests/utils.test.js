@@ -8,7 +8,7 @@ const {
     validatePagination,
     validateSort,
     isValidGitHubCloneUrl,
-    validateMergeRepositoryDescriptors
+    validateMergeRepositoryDescriptors,
     isValidMergeRepository
 } = require('../utils/validation');
 
@@ -91,6 +91,7 @@ describe('Validation Utilities', () => {
             expect(isValidGitHubCloneUrl('https://gitlab.com/octocat/hello-world.git')).toBe(false);
             expect(isValidGitHubCloneUrl('ssh://github.com/octocat/hello-world.git')).toBe(false);
             expect(isValidGitHubCloneUrl('javascript:alert(1)')).toBe(false);
+            expect(isValidGitHubCloneUrl('https://github.com:8443/octocat/hello-world.git')).toBe(false);
             expect(isValidGitHubCloneUrl('https://github.com/octo_cat/hello-world.git')).toBe(false);
         });
     });

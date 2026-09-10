@@ -32,8 +32,7 @@ const {
     isValidRepoPath,
     validatePagination,
     validateSort,
-    validateMergeRepositoryDescriptors,
-    isValidMergeRepository
+    validateMergeRepositoryDescriptors
 } = require('./utils/validation');
 
 const app = express();
@@ -395,19 +394,6 @@ app.post('/api/create-merged-repo', async (req, res) => {
             return res.status(400).json({ error: 'Maximum 50 repositories can be merged at once' });
         }
 
-        const normalizedRepositories = repositories.map(repository => ({
-            name: typeof repository?.name === 'string' ? repository.name.trim() : '',
-            full_name: typeof repository?.full_name === 'string' ? repository.full_name.trim() : '',
-            clone_url: typeof repository?.clone_url === 'string' ? repository.clone_url.trim() : '',
-            description: sanitizeString(repository?.description)
-        }));
-
-        if (normalizedRepositories.some(repository => !isValidMergeRepository(repository))) {
-            return res.status(400).json({
-                error: 'Each repository must include a valid name, full_name, and credential-free GitHub clone_url'
-            });
-        }
-        
         if (!token || !isValidGitHubToken(token)) {
             return res.status(400).json({ error: 'Valid token is required' });
         }
@@ -422,6 +408,14 @@ app.post('/api/create-merged-repo', async (req, res) => {
         
         description = sanitizeString(description);
 
+        if (target === 'existing') {
+            const normalizedTarget = targetRepositoryFullName.toLowerCase();
+            const includesTarget = sanitizedRepositories.some(repo => repo.full_name.toLowerCase() === normalizedTarget);
+            if (includesTarget) {
+                return res.status(400).json({ error: 'target_repository cannot also be included in repositories' });
+            }
+        }
+
         headers = {
             'Authorization': `token ${token}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -431,12 +425,6 @@ app.post('/api/create-merged-repo', async (req, res) => {
         let targetRepositoryResponse;
 
         if (target === 'existing') {
-            const normalizedTarget = targetRepositoryFullName.toLowerCase();
-            const includesTarget = sanitizedRepositories.some(repo => repo.full_name.toLowerCase() === normalizedTarget);
-            if (includesTarget) {
-                return res.status(400).json({ error: 'target_repository cannot also be included in repositories' });
-            }
-
             logger.info('Merging into existing repository', { targetRepositoryFullName, repoCount: sanitizedRepositories.length });
             const [targetOwner, targetRepoName] = targetRepositoryFullName.split('/');
             const existingRepoApiUrl = `https://api.github.com/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepoName)}`;
