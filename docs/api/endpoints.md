@@ -174,7 +174,6 @@ Create a new repository (or merge into an existing repository) and automatically
 {
   "target": "new",
   "name": "merged-repo",
-  "target_repository": "your-username/existing-repo",
   "merge_strategy": "subfolders",
   "description": "Merged repository containing multiple projects",
   "token": "ghp_...",
