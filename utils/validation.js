@@ -200,7 +200,7 @@ function validateMergeRepositoryDescriptors(repositories) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has an invalid clone_url` };
         }
 
-        if (`${cloneUrlParts.owner}/${cloneUrlParts.repositoryName}` !== sanitizedFullName) {
+        if (`${cloneUrlParts.owner}/${cloneUrlParts.repositoryName}`.toLowerCase() !== sanitizedFullName.toLowerCase()) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has a clone_url that does not match full_name` };
         }
 

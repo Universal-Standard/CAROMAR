@@ -55,7 +55,7 @@ function getRateLimitAbortReason(error) {
 }
 
 function isSupportedContentsMode(mode) {
-    return !mode || mode === SUPPORTED_CONTENTS_FILE_MODE;
+    return mode === SUPPORTED_CONTENTS_FILE_MODE;
 }
 
 async function buildMergePlan({ axiosClient, headers, sourceRepositories }) {

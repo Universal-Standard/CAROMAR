@@ -163,7 +163,7 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
                     data: {
                         truncated: false,
                         tree: [
-                            { type: 'blob', path: 'README.md', sha: 'blob-sha', size: 20 }
+                            { type: 'blob', path: 'README.md', sha: 'blob-sha', size: 20, mode: '100644' }
                         ]
                     }
                 });

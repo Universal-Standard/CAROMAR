@@ -122,9 +122,9 @@ describe('Merge Automation Utilities', () => {
                     return Promise.resolve({
                         data: {
                             tree: [
-                                { type: 'blob', path: 'tests/ok.test.js', sha: 'sha-ok', size: 32 },
-                                { type: 'blob', path: 'bad.bin', sha: 'sha-bad', size: 64 },
-                                { type: 'blob', path: 'large.bin', sha: 'sha-large', size: MAX_FILE_SIZE_BYTES + 1 }
+                                { type: 'blob', path: 'tests/ok.test.js', sha: 'sha-ok', size: 32, mode: '100644' },
+                                { type: 'blob', path: 'bad.bin', sha: 'sha-bad', size: 64, mode: '100644' },
+                                { type: 'blob', path: 'large.bin', sha: 'sha-large', size: MAX_FILE_SIZE_BYTES + 1, mode: '100644' }
                             ]
                         }
                     });
@@ -176,7 +176,7 @@ describe('Merge Automation Utilities', () => {
                     return Promise.resolve({
                         data: {
                             tree: [
-                                { type: 'blob', path: 'missing-size.bin', sha: 'sha-big' }
+                                { type: 'blob', path: 'missing-size.bin', sha: 'sha-big', mode: '100644' }
                             ]
                         }
                     });
@@ -233,8 +233,8 @@ describe('Merge Automation Utilities', () => {
                     return Promise.resolve({
                         data: {
                             tree: [
-                                { type: 'blob', path: 'README.md', sha: 'sha-1', size: 10 },
-                                { type: 'blob', path: 'SECOND.md', sha: 'sha-2', size: 10 }
+                                { type: 'blob', path: 'README.md', sha: 'sha-1', size: 10, mode: '100644' },
+                                { type: 'blob', path: 'SECOND.md', sha: 'sha-2', size: 10, mode: '100644' }
                             ]
                         }
                     });

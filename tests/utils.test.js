@@ -83,6 +83,7 @@ describe('Validation Utilities', () => {
         it('should validate GitHub clone URLs', () => {
             expect(isValidGitHubCloneUrl('https://github.com/octocat/hello-world.git')).toBe(true);
             expect(isValidGitHubCloneUrl('https://github.com/octocat/hello-world')).toBe(true);
+            expect(isValidGitHubCloneUrl('https://github.com/OctoCat/hello-world.git')).toBe(true);
         });
 
         it('should reject non-GitHub or malformed clone URLs', () => {
@@ -152,6 +153,19 @@ describe('Validation Utilities', () => {
 
             expect(result.isValid).toBe(false);
             expect(result.error).toContain('clone_url that does not match full_name');
+        });
+
+        it('should accept clone_url and full_name case differences for the same repository', () => {
+            const result = validateMergeRepositoryDescriptors([
+                {
+                    name: 'repo-one',
+                    full_name: 'octocat/repo-one',
+                    clone_url: 'https://github.com/OctoCat/Repo-One.git'
+                }
+            ]);
+
+            expect(result.isValid).toBe(true);
+            expect(result.error).toBeNull();
         });
 
         it('should reject reserved dot-segment repository names', () => {
