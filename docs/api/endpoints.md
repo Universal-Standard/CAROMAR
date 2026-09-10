@@ -213,6 +213,8 @@ Invalid descriptors return `400` with an indexed error message (example: `Reposi
     "mergedFiles": 42,
     "sourceRepositories": 2,
     "skippedFiles": [],
+    "aborted": false,
+    "abortReason": null,
     "repositoryResults": [
       {
         "full_name": "owner/repo1",
