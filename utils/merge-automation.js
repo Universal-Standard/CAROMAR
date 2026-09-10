@@ -228,6 +228,13 @@ async function mergeRepositoriesIntoTarget({
                         { headers }
                     );
 
+                    if (blobResponse.data.encoding !== 'base64') {
+                        const reason = `Skipped ${targetPath}: unsupported blob encoding ${blobResponse.data.encoding || 'unknown'}`;
+                        summary.skippedFiles.push(reason);
+                        repositoryResult.skippedFiles.push(reason);
+                        continue;
+                    }
+
                     if (exceedsMaxFileSize(getBase64DecodedByteLength(blobResponse.data.content))) {
                         const reason = `Skipped ${targetPath}: file exceeds ${MAX_FILE_SIZE_BYTES} bytes`;
                         summary.skippedFiles.push(reason);

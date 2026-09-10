@@ -131,7 +131,7 @@ describe('Merge Automation Utilities', () => {
                 }
 
                 if (url.includes('/git/blobs/sha-ok')) {
-                    return Promise.resolve({ data: { content: Buffer.from('small').toString('base64') } });
+                    return Promise.resolve({ data: { content: Buffer.from('small').toString('base64'), encoding: 'base64' } });
                 }
 
                 if (url.includes('/git/blobs/sha-bad')) {
@@ -183,7 +183,7 @@ describe('Merge Automation Utilities', () => {
                 }
 
                 if (url.includes('/git/blobs/sha-big')) {
-                    return Promise.resolve({ data: { content: oversizedContent } });
+                    return Promise.resolve({ data: { content: oversizedContent, encoding: 'base64' } });
                 }
 
                 throw new Error(`Unexpected get URL: ${url}`);
@@ -245,7 +245,7 @@ describe('Merge Automation Utilities', () => {
                 }
 
                 if (url.includes('/git/blobs/sha-2')) {
-                    return Promise.resolve({ data: { content: Buffer.from('ok').toString('base64') } });
+                    return Promise.resolve({ data: { content: Buffer.from('ok').toString('base64'), encoding: 'base64' } });
                 }
 
                 throw new Error(`Unexpected get URL: ${url}`);
@@ -293,7 +293,7 @@ describe('Merge Automation Utilities', () => {
                 }
 
                 if (url.includes('/git/blobs/sha-readme')) {
-                    return Promise.resolve({ data: { content: Buffer.from('hello').toString('base64') } });
+                    return Promise.resolve({ data: { content: Buffer.from('hello').toString('base64'), encoding: 'base64' } });
                 }
 
                 throw new Error(`Unexpected get URL: ${url}`);
@@ -318,5 +318,50 @@ describe('Merge Automation Utilities', () => {
         expect(result.mergedFiles).toBe(1);
         expect(result.skippedFiles.some(reason => reason.includes('unsupported git mode 100755'))).toBe(true);
         expect(axiosClient.put).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips blobs returned with unsupported encodings', async () => {
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: [
+                                { type: 'blob', path: 'README.md', sha: 'sha-readme', size: 10, mode: '100644' }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/git/blobs/sha-readme')) {
+                    return Promise.resolve({ data: { content: 'hello', encoding: 'utf-8' } });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            }),
+            put: jest.fn(() => Promise.resolve({ data: {} }))
+        };
+
+        const result = await mergeRepositoriesIntoTarget({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                {
+                    name: 'repo-a',
+                    full_name: 'octocat/repo-a',
+                    clone_url: 'https://github.com/octocat/repo-a.git'
+                }
+            ],
+            targetFullName: 'octocat/merged-repo',
+            targetBranch: 'main'
+        });
+
+        expect(result.mergedFiles).toBe(0);
+        expect(result.skippedFiles.some(reason => reason.includes('unsupported blob encoding utf-8'))).toBe(true);
+        expect(axiosClient.put).not.toHaveBeenCalled();
     });
 });

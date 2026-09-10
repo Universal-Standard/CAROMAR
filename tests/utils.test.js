@@ -198,6 +198,24 @@ describe('Validation Utilities', () => {
             expect(result.isValid).toBe(false);
             expect(result.error).toContain('duplicate name');
         });
+
+        it('should fail when full_name differs only by case', () => {
+            const result = validateMergeRepositoryDescriptors([
+                {
+                    name: 'repo-one',
+                    full_name: 'octocat/repo-one',
+                    clone_url: 'https://github.com/octocat/repo-one.git'
+                },
+                {
+                    name: 'repo-two',
+                    full_name: 'OctoCat/Repo-One',
+                    clone_url: 'https://github.com/OctoCat/Repo-One.git'
+                }
+            ]);
+
+            expect(result.isValid).toBe(false);
+            expect(result.error).toContain('duplicate full_name');
+        });
     });
 
     describe('validateSort', () => {

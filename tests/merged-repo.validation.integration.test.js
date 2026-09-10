@@ -170,7 +170,7 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
             }
 
             if (url.includes('/git/blobs/blob-sha')) {
-                return Promise.resolve({ data: { content: Buffer.from('hello').toString('base64') } });
+                return Promise.resolve({ data: { content: Buffer.from('hello').toString('base64'), encoding: 'base64' } });
             }
 
             throw new Error(`Unexpected axios.get URL in test: ${url}`);

@@ -210,12 +210,14 @@ function validateMergeRepositoryDescriptors(repositories) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has a duplicate name` };
         }
 
-        if (seenFullNames.has(sanitizedFullName)) {
+        const normalizedFullName = sanitizedFullName.toLowerCase();
+
+        if (seenFullNames.has(normalizedFullName)) {
             return { isValid: false, repositories: [], error: `Repository at index ${index} has a duplicate full_name` };
         }
 
         seenNames.add(normalizedName);
-        seenFullNames.add(sanitizedFullName);
+        seenFullNames.add(normalizedFullName);
 
         sanitizedRepositories.push({
             name: sanitizedName,
