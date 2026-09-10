@@ -384,6 +384,12 @@ app.post('/api/create-merged-repo', async (req, res) => {
             mergePlan
         });
 
+        const mergeMessage = mergeSummary.aborted
+            ? 'Repository created, but automatic merge was aborted'
+            : (mergeSummary.skippedFiles.length > 0
+                ? 'Repository created and partially merged automatically'
+                : 'Repository created and merged automatically');
+
         res.json({
             success: true,
             repository: {
@@ -393,7 +399,7 @@ app.post('/api/create-merged-repo', async (req, res) => {
                 clone_url: newRepo.clone_url,
                 ssh_url: newRepo.ssh_url
             },
-            message: 'Repository created and merged automatically',
+            message: mergeMessage,
             automated_merge: mergeSummary
         });
     } catch (error) {
