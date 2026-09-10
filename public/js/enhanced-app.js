@@ -1151,6 +1151,11 @@ class EnhancedCaromarApp {
                     <p><strong>Total merged files:</strong> ${automatedMerge.mergedFiles}</p>
                     <p><strong>Source repositories:</strong> ${automatedMerge.sourceRepositories}</p>
                     <p><strong>Skipped items:</strong> ${automatedMerge.skippedFiles.length}</p>
+                    ${automatedMerge.skippedFiles.length > 0 ? `
+                        <ul class="merge-skipped-items">
+                            ${automatedMerge.skippedFiles.map(reason => `<li>${this.escapeHtml(reason)}</li>`).join('')}
+                        </ul>
+                    ` : ''}
                     ${automatedMerge.aborted ? `<p><strong>Merge stopped early:</strong> ${this.escapeHtml(automatedMerge.abortReason)}</p>` : ''}
         const mergeSteps = result.merge_instructions.steps.join('\n');
         const escapedName = this.escapeHtml(result.repository.name);
