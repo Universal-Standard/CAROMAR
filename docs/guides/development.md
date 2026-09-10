@@ -189,6 +189,11 @@ Create a new repository for merging multiple repositories.
 }
 ```
 
+**Response notes:**
+- A successful response means the destination repository was created, not that the merge is complete.
+- `merge_status` is returned as `pending_manual_steps` until you finish the provided local git steps.
+- If a local/manual merge is interrupted, remove any partially cloned repository folder before retrying that repository and continue with the remaining repositories.
+
 ## Frontend JavaScript API
 
 ### EnhancedCaromarApp Class
