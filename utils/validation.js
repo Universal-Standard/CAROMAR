@@ -125,6 +125,8 @@ function parseGitHubCloneUrl(cloneUrl) {
         if (
             parsedUrl.protocol !== 'https:' ||
             parsedUrl.hostname !== 'github.com' ||
+            parsedUrl.username ||
+            parsedUrl.password ||
             parsedUrl.search ||
             parsedUrl.hash
         ) {
