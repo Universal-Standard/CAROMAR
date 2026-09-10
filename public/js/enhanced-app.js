@@ -308,17 +308,38 @@ class EnhancedCaromarApp {
      * Update the rate limit display in the UI
      * @returns {void}
      */
+    formatRateLimitReset(resetValue) {
+        if (resetValue === undefined || resetValue === null || resetValue === '') {
+            return 'unknown';
+        }
+
+        const numericReset = Number(resetValue);
+        const resetDate = Number.isFinite(numericReset) && String(resetValue).trim() !== ''
+            ? new Date(numericReset * 1000)
+            : new Date(resetValue);
+
+        if (Number.isNaN(resetDate.getTime())) {
+            return 'unknown';
+        }
+
+        return resetDate.toLocaleTimeString();
+    }
+
+    /**
+     * Update the rate limit display in the UI
+     * @returns {void}
+     */
     updateRateLimitDisplay() {
         if (!this.rateLimitInfo) return;
         
         const rateLimitElement = document.getElementById('rate-limit-info');
         const remaining = this.rateLimitInfo.remaining;
-        const total = this.rateLimitInfo.limit;
-        const resetTime = new Date(this.rateLimitInfo.reset * 1000);
+        const total = this.rateLimitInfo.limit ?? '?';
+        const resetTime = this.formatRateLimitReset(this.rateLimitInfo.reset);
         
         rateLimitElement.innerHTML = `
             Rate limit: ${remaining}/${total} remaining 
-            (resets ${resetTime.toLocaleTimeString()})
+            (resets ${resetTime})
         `;
         
         if (remaining < 100) {
@@ -955,7 +976,7 @@ class EnhancedCaromarApp {
             const result = await response.json();
             
             if (response.ok) {
-                this.updateProgress(100, 'Repository created successfully!');
+                this.updateProgress(100, 'Repository created. Complete the manual merge steps locally.');
                 this.showMergeInstructions(result);
             } else {
                 throw new Error(result.error || 'Failed to create merged repository');
@@ -973,14 +994,16 @@ class EnhancedCaromarApp {
         resultsContent.innerHTML = `
             <div class="merge-success">
                 <div class="summary-card">
-                    <h3>✅ Repository Created Successfully</h3>
+                    <h3>✅ Repository Created — Merge Still Pending</h3>
                     <p><strong>Name:</strong> ${result.repository.name}</p>
                     <p><strong>URL:</strong> <a href="${result.repository.html_url}" target="_blank">${result.repository.html_url}</a></p>
+                    <p>${result.message}</p>
                 </div>
                 
                 <div class="merge-instructions">
                     <h4>📋 Manual Merge Instructions</h4>
-                    <p>To complete the merge process, run the following commands locally:</p>
+                    <p>${result.merge_instructions.note}</p>
+                    <p>${result.merge_instructions.interruption_note}</p>
                     <div class="code-block">
                         <pre><code>${result.merge_instructions.steps.join('\n')}</code></pre>
                         <button class="copy-btn" onclick="navigator.clipboard.writeText('${result.merge_instructions.steps.join('\\n')}')">

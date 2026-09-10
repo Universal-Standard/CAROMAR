@@ -164,7 +164,7 @@ Choose between two operation modes:
 **Merge into Single Repository:**
 - Select multiple repositories to combine
 - Enter a name for the merged repository
-- Creates one repository with all selected repos as folders
+- Creates the destination repository and provides local/manual merge steps for adding each selected repo as a folder
 
 ### Step 4: Execute Action
 1. Select your desired repositories using checkboxes
@@ -175,6 +175,7 @@ Choose between two operation modes:
 ### Step 5: Review Results
 - View detailed results of the operation
 - Access direct links to newly created repositories
+- For merge operations, complete the provided local/manual git steps before treating the merge as finished
 - Review any errors or issues encountered
 
 ---

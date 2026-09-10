@@ -130,8 +130,9 @@ Search for repositories owned by a user or organization.
     "has_more": false
   },
   "rate_limit": {
+    "limit": 5000,
     "remaining": 4998,
-    "reset": "2024-01-01T01:00:00.000Z"
+    "reset": 1704070800
   }
 }
 ```
@@ -200,9 +201,12 @@ Create a new repository that will contain multiple repositories as subdirectorie
     "html_url": "https://github.com/your-username/merged-repo",
     "clone_url": "https://github.com/your-username/merged-repo.git"
   },
-  "message": "Repository created successfully",
+  "message": "Repository created successfully. Manual merge steps are still required.",
+  "merge_status": "pending_manual_steps",
   "merge_instructions": {
     "repositories": [...],
+    "note": "These commands are for manual execution. The merge is not complete until you run every step locally and commit the combined result.",
+    "interruption_note": "If you stop partway through, remove any partially cloned repository folder before retrying that repository, then continue with the remaining repositories.",
     "steps": ["git clone ...", "cd ...", ...]
   }
 }
