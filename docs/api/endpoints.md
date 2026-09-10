@@ -164,7 +164,7 @@ Fork a single repository to your account.
 ```
 
 ### Create Merged Repository
-Create a new repository and automatically merge selected repositories into subdirectories using the server-side merge engine.
+Create a new repository (or merge into an existing repository) and automatically merge selected repositories using the server-side merge engine.
 
 **Endpoint:** `POST /api/create-merged-repo`
 
