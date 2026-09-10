@@ -125,7 +125,7 @@ describe('Merge Automation Utilities', () => {
     });
 
     it('fails planning when the estimated API request count exceeds the budget', async () => {
-        const fileCountThatExceedsRequestBudget = Math.floor((MAX_MERGE_API_REQUESTS - 2) / 2);
+        const fileCountThatExceedsRequestBudget = Math.floor((MAX_MERGE_API_REQUESTS - 4) / 2) + 1;
         const axiosClient = {
             get: jest.fn(url => {
                 if (url === 'https://api.github.com/repos/octocat/repo-a') {

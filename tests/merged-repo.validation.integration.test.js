@@ -143,7 +143,7 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
     });
 
     it('rejects automated merges that would exceed the synchronous GitHub request budget before creating the target repository', async () => {
-        const fileCountThatExceedsRequestBudget = Math.floor((MAX_MERGE_API_REQUESTS - 2) / 2);
+        const fileCountThatExceedsRequestBudget = Math.floor((MAX_MERGE_API_REQUESTS - 4) / 2) + 1;
 
         axios.get.mockImplementation(url => {
             if (url === 'https://api.github.com/repos/octocat/repo-one') {
