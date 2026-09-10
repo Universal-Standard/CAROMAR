@@ -292,6 +292,7 @@ describe('Merge Automation Utilities', () => {
                         data: {
                             tree: [
                                 { type: 'blob', path: 'bin/run.sh', sha: 'sha-run', size: 12, mode: '100755' },
+                                { type: 'blob', path: 'current-link', sha: 'sha-link', size: 10, mode: '120000' },
                                 { type: 'blob', path: 'README.md', sha: 'sha-readme', size: 10, mode: '100644' }
                             ]
                         }
@@ -322,7 +323,8 @@ describe('Merge Automation Utilities', () => {
         });
 
         expect(result.mergedFiles).toBe(1);
-        expect(result.skippedFiles.some(reason => reason.includes('unsupported git mode 100755'))).toBe(true);
+        expect(result.skippedFiles.some(reason => reason.includes('git mode 100755 cannot be recreated via contents API'))).toBe(true);
+        expect(result.skippedFiles.some(reason => reason.includes('git mode 120000 cannot be recreated via contents API'))).toBe(true);
         expect(axiosClient.put).toHaveBeenCalledTimes(1);
     });
 

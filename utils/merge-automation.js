@@ -250,7 +250,7 @@ async function mergeRepositoriesIntoTarget({
                 }
 
                 if (!isSupportedContentsMode(file.mode)) {
-                    const reason = `Skipped ${targetPath}: unsupported git mode ${file.mode}`;
+                    const reason = `Skipped ${targetPath}: git mode ${file.mode} cannot be recreated via contents API`;
                     summary.skippedFiles.push(reason);
                     repositoryResult.skippedFiles.push(reason);
                     continue;
