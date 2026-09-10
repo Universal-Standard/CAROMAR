@@ -5,6 +5,10 @@
 const MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1 MB safety limit per file
 const MAX_MERGE_FILES = 250;
 const SUPPORTED_CONTENTS_FILE_MODE = '100644';
+const MERGE_STRATEGIES = {
+    SUBFOLDERS: 'subfolders',
+    COHESIVE: 'cohesive'
+};
 
 function normalizeBase64Content(content = '') {
     return content.replace(/\s+/g, '');
@@ -176,7 +180,9 @@ async function mergeRepositoriesIntoTarget({
     sourceRepositories,
     targetFullName,
     targetBranch = 'main',
-    mergePlan = null
+    mergePlan = null,
+    mergeStrategy = MERGE_STRATEGIES.SUBFOLDERS,
+    reservedTargetPaths = []
 }) {
     const summary = {
         mergedFiles: 0,
@@ -193,6 +199,30 @@ async function mergeRepositoriesIntoTarget({
         headers,
         sourceRepositories
     })).repositories;
+    const usedTargetPaths = new Set(reservedTargetPaths.map(path => String(path).toLowerCase()));
+
+    const reserveTargetPath = (sourceRepositoryName, sourcePath) => {
+        const primaryPath = mergeStrategy === MERGE_STRATEGIES.COHESIVE
+            ? sourcePath
+            : `${sourceRepositoryName}/${sourcePath}`;
+        const normalizedPrimaryPath = primaryPath.toLowerCase();
+
+        if (!usedTargetPaths.has(normalizedPrimaryPath)) {
+            usedTargetPaths.add(normalizedPrimaryPath);
+            return primaryPath;
+        }
+
+        if (mergeStrategy === MERGE_STRATEGIES.COHESIVE) {
+            const fallbackPath = `${sourceRepositoryName}/${sourcePath}`;
+            const normalizedFallbackPath = fallbackPath.toLowerCase();
+            if (!usedTargetPaths.has(normalizedFallbackPath)) {
+                usedTargetPaths.add(normalizedFallbackPath);
+                return fallbackPath;
+            }
+        }
+
+        return null;
+    };
 
     for (const plannedRepository of plannedRepositories) {
         const sourceRepository = plannedRepository.sourceRepository;
@@ -210,7 +240,14 @@ async function mergeRepositoriesIntoTarget({
             repositoryResult.capabilities = inferRepositoryCapabilities(files);
 
             for (const file of files) {
-                const targetPath = `${sourceRepository.name}/${file.path}`;
+                const targetPath = reserveTargetPath(sourceRepository.name, file.path);
+
+                if (!targetPath) {
+                    const reason = `Skipped ${sourceRepository.name}/${file.path}: path conflict in target repository`;
+                    summary.skippedFiles.push(reason);
+                    repositoryResult.skippedFiles.push(reason);
+                    continue;
+                }
 
                 if (!isSupportedContentsMode(file.mode)) {
                     const reason = `Skipped ${targetPath}: unsupported git mode ${file.mode}`;
@@ -311,6 +348,7 @@ async function mergeRepositoriesIntoTarget({
 module.exports = {
     MAX_FILE_SIZE_BYTES,
     MAX_MERGE_FILES,
+    MERGE_STRATEGIES,
     normalizeBase64Content,
     getBase64DecodedByteLength,
     exceedsMaxFileSize,

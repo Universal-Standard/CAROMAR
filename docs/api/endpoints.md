@@ -171,7 +171,10 @@ Create a new repository and automatically merge selected repositories into subdi
 **Request Body:**
 ```json
 {
+  "target": "new",
   "name": "merged-repo",
+  "target_repository": "your-username/existing-repo",
+  "merge_strategy": "subfolders",
   "description": "Merged repository containing multiple projects",
   "token": "ghp_...",
   "private": false,
@@ -190,6 +193,14 @@ Create a new repository and automatically merge selected repositories into subdi
 }
 ```
 
+`target` options:
+- `"new"` (default): create a new repository using `name`
+- `"existing"`: merge into an existing repository you can push to, using `target_repository`
+
+`merge_strategy` options:
+- `"subfolders"` (default): each source repo merges under `<repo-name>/...`
+- `"cohesive"`: merge at target root; path conflicts fall back to `<repo-name>/...`
+
 **Validation Rules (repositories[]):**
 - `name` must be a valid GitHub repository name (`[A-Za-z0-9._-]`, max 100 chars)
 - `full_name` must match `owner/repository`
@@ -206,8 +217,11 @@ Invalid descriptors return `400` with an indexed error message (example: `Reposi
     "name": "merged-repo",
     "full_name": "your-username/merged-repo",
     "html_url": "https://github.com/your-username/merged-repo",
-    "clone_url": "https://github.com/your-username/merged-repo.git"
+    "clone_url": "https://github.com/your-username/merged-repo.git",
+    "ssh_url": "git@github.com:your-username/merged-repo.git"
   },
+  "target": "new",
+  "merge_strategy": "subfolders",
   "message": "Repository created and merged automatically",
   "automated_merge": {
     "mergedFiles": 42,

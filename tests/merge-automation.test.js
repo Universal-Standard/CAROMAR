@@ -1,6 +1,7 @@
 const {
     MAX_FILE_SIZE_BYTES,
     MAX_MERGE_FILES,
+    MERGE_STRATEGIES,
     normalizeBase64Content,
     getBase64DecodedByteLength,
     buildMergePlan,
@@ -413,5 +414,102 @@ describe('Merge Automation Utilities', () => {
         expect(result.mergedFiles).toBe(0);
         expect(result.skippedFiles.some(reason => reason.includes('unsupported base64 payload'))).toBe(true);
         expect(axiosClient.put).not.toHaveBeenCalled();
+    });
+
+    it('uses cohesive strategy to merge into target root', async () => {
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: [
+                                { type: 'blob', path: 'README.md', sha: 'sha-readme', size: 10, mode: '100644' }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/git/blobs/sha-readme')) {
+                    return Promise.resolve({ data: { content: Buffer.from('hello').toString('base64'), encoding: 'base64' } });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            }),
+            put: jest.fn(() => Promise.resolve({ data: {} }))
+        };
+
+        await mergeRepositoriesIntoTarget({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                {
+                    name: 'repo-a',
+                    full_name: 'octocat/repo-a',
+                    clone_url: 'https://github.com/octocat/repo-a.git'
+                }
+            ],
+            targetFullName: 'octocat/merged-repo',
+            targetBranch: 'main',
+            mergeStrategy: MERGE_STRATEGIES.COHESIVE
+        });
+
+        const targetUrl = axiosClient.put.mock.calls[0][0];
+        expect(targetUrl).toContain('/contents/README.md');
+    });
+
+    it('falls back to source folder on cohesive path conflicts', async () => {
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a' || url === 'https://api.github.com/repos/octocat/repo-b') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/octocat/repo-a/git/trees/main?recursive=1') || url.includes('/octocat/repo-b/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: [
+                                { type: 'blob', path: 'README.md', sha: url.includes('repo-a') ? 'sha-a' : 'sha-b', size: 10, mode: '100644' }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/git/blobs/sha-a') || url.includes('/git/blobs/sha-b')) {
+                    return Promise.resolve({ data: { content: Buffer.from('hello').toString('base64'), encoding: 'base64' } });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            }),
+            put: jest.fn(() => Promise.resolve({ data: {} }))
+        };
+
+        await mergeRepositoriesIntoTarget({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                {
+                    name: 'repo-a',
+                    full_name: 'octocat/repo-a',
+                    clone_url: 'https://github.com/octocat/repo-a.git'
+                },
+                {
+                    name: 'repo-b',
+                    full_name: 'octocat/repo-b',
+                    clone_url: 'https://github.com/octocat/repo-b.git'
+                }
+            ],
+            targetFullName: 'octocat/merged-repo',
+            targetBranch: 'main',
+            mergeStrategy: MERGE_STRATEGIES.COHESIVE
+        });
+
+        expect(axiosClient.put).toHaveBeenCalledTimes(2);
+        const targetUrls = axiosClient.put.mock.calls.map(call => call[0]);
+        expect(targetUrls.some(url => url.includes('/contents/README.md'))).toBe(true);
+        expect(targetUrls.some(url => url.includes('/contents/repo-b/README.md'))).toBe(true);
     });
 });

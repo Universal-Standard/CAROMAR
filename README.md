@@ -46,7 +46,10 @@ Deploy CAROMAR to Netlify with one click:
 
 #### 2. Merge into Single Repository
 - Combines multiple repositories into one organized repository
-- Each source repository becomes a main folder
+- Supports either creating a new target repository or merging into an existing owned repository
+- Merge strategy options:
+  - **Subfolders**: each source repository becomes a main folder
+  - **Cohesive**: merges at target root with automatic conflict fallback folders
 - Maintains separation while creating unified access
 - Fully automated server-side merge execution (no manual git steps required)
 - Repository descriptor validation (name/full_name/clone_url + duplicate detection) before merge
@@ -165,8 +168,9 @@ Choose between two operation modes:
 
 **Merge into Single Repository:**
 - Select multiple repositories to combine
-- Enter a name for the merged repository
-- Creates one repository with all selected repos as folders
+- Choose whether to create a new repository or target an existing repository you can push to
+- Choose a merge strategy (subfolders or cohesive)
+- Provide the target repository name/details and execute merge
 
 ### Step 4: Execute Action
 1. Select your desired repositories using checkboxes
