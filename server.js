@@ -32,7 +32,7 @@ const {
     isValidRepoPath,
     validatePagination,
     validateSort,
-    validateMergeRepositoryDescriptors
+    validateMergeRepositoryDescriptors,
     isValidMergeRepository
 } = require('./utils/validation');
 
@@ -422,40 +422,39 @@ app.post('/api/create-merged-repo', async (req, res) => {
         
         description = sanitizeString(description);
 
-        if (target === 'existing') {
-            const normalizedTarget = targetRepositoryFullName.toLowerCase();
-            const includesTarget = sanitizedRepositories.some(repo => repo.full_name.toLowerCase() === normalizedTarget);
-            if (includesTarget) {
-                return res.status(400).json({ error: 'target_repository cannot also be included in repositories' });
-        logger.info('Creating merged repository', { name, repoCount: repositories.length });
-
-        // Create the new repository
-        const createRepoResponse = await axios.post('https://api.github.com/user/repos', {
-            name,
-            description: description || `Merged repository containing: ${normalizedRepositories.map(r => r.name).join(', ')}`,
-            private: isPrivate,
-            auto_init: true
-        }, {
-            headers: {
-                'Authorization': `token ${token}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'CAROMAR-App'
-            }
-        }
-
         headers = {
             'Authorization': `token ${token}`,
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'CAROMAR-App'
         };
 
+        let targetRepositoryResponse;
+
+        if (target === 'existing') {
+            const normalizedTarget = targetRepositoryFullName.toLowerCase();
+            const includesTarget = sanitizedRepositories.some(repo => repo.full_name.toLowerCase() === normalizedTarget);
+            if (includesTarget) {
+                return res.status(400).json({ error: 'target_repository cannot also be included in repositories' });
+            }
+
+            logger.info('Merging into existing repository', { targetRepositoryFullName, repoCount: sanitizedRepositories.length });
+            const [targetOwner, targetRepoName] = targetRepositoryFullName.split('/');
+            const existingRepoApiUrl = `https://api.github.com/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepoName)}`;
+            const existingRepoResponse = await axios.get(existingRepoApiUrl, { headers });
+            const canWrite = Boolean(existingRepoResponse.data?.permissions?.push || existingRepoResponse.data?.permissions?.admin);
+
+            if (!canWrite) {
+                return res.status(403).json({ error: 'Insufficient permissions to merge into target_repository' });
+            }
+
+            targetRepositoryResponse = existingRepoResponse.data;
+        }
+
         const mergePlan = await buildMergePlan({
             axiosClient: axios,
             headers,
             sourceRepositories: sanitizedRepositories
         });
-
-        let targetRepositoryResponse;
 
         if (target === 'new') {
             logger.info('Creating merged repository', { name, repoCount: sanitizedRepositories.length });
@@ -472,18 +471,6 @@ app.post('/api/create-merged-repo', async (req, res) => {
             targetRepositoryResponse = createRepoResponse.data;
             createdRepositoryFullName = targetRepositoryResponse.full_name;
             logger.info('Merged repository created successfully', { full_name: targetRepositoryResponse.full_name });
-        } else {
-            logger.info('Merging into existing repository', { targetRepositoryFullName, repoCount: sanitizedRepositories.length });
-            const [targetOwner, targetRepoName] = targetRepositoryFullName.split('/');
-            const existingRepoApiUrl = `https://api.github.com/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepoName)}`;
-            const existingRepoResponse = await axios.get(existingRepoApiUrl, { headers });
-            const canWrite = Boolean(existingRepoResponse.data?.permissions?.push || existingRepoResponse.data?.permissions?.admin);
-
-            if (!canWrite) {
-                return res.status(403).json({ error: 'Insufficient permissions to merge into target_repository' });
-            }
-
-            targetRepositoryResponse = existingRepoResponse.data;
         }
 
         const { files: targetRepositoryFiles } = await getRepositoryTree(axios, headers, targetRepositoryResponse.full_name);
@@ -519,24 +506,6 @@ app.post('/api/create-merged-repo', async (req, res) => {
             merge_strategy: mergeStrategy,
             message: mergeMessage,
             automated_merge: mergeSummary
-            message: 'Repository created successfully. Manual merge steps are still required.',
-            merge_status: 'pending_manual_steps',
-            merge_instructions: {
-                repositories: normalizedRepositories,
-                note: 'These commands are for manual execution. The merge is not complete until you run every step locally and commit the combined result.',
-                interruption_note: 'If you stop partway through, remove any partially cloned repository folder before retrying that repository, then continue with the remaining repositories.',
-                steps: [
-                    'git clone ' + newRepo.clone_url,
-                    'cd ' + sanitizeString(newRepo.name),
-                    ...normalizedRepositories.map(repo => [
-                        'mkdir "' + sanitizeString(repo.name) + '"',
-                        'cd "' + sanitizeString(repo.name) + '"',
-                        'git clone ' + repo.clone_url + ' .',
-                        'rm -rf .git',
-                        'cd ..'
-                    ]).flat()
-                ]
-            }
         });
     } catch (error) {
         logger.error('Error creating merged repository', error);

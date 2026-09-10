@@ -381,10 +381,6 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
 
     it('rejects merging into an existing repository without write permissions', async () => {
         axios.get.mockImplementation(url => {
-            if (url === 'https://api.github.com/repos/octocat/repo-one') {
-                return Promise.resolve({ data: { default_branch: 'main' } });
-            }
-
             if (url === 'https://api.github.com/repos/octocat/existing-target') {
                 return Promise.resolve({
                     data: {
@@ -430,6 +426,11 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
         expect(response.statusCode).toBe(403);
         expect(response.body.error).toContain('Insufficient permissions');
         expect(axios.post).not.toHaveBeenCalled();
+        expect(axios.get).toHaveBeenCalledTimes(1);
+        expect(axios.get).toHaveBeenCalledWith(
+            'https://api.github.com/repos/octocat/existing-target',
+            expect.any(Object)
+        );
     });
 
     it('rejects existing-target merges when target repository is included as a source', async () => {

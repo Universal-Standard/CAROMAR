@@ -307,7 +307,6 @@ module.exports = {
     validateSort,
     isValidGitHubCloneUrl,
     validateMergeRepositoryDescriptors,
-    isValidEmail
     isValidEmail,
     isValidMergeRepository
 };
