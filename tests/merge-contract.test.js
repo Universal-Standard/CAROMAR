@@ -147,5 +147,34 @@ describe('Merge and rate-limit contract', () => {
                 reset: 1704070800
             });
         });
+
+        it('should keep the rate limit error payload aligned with the success contract', async () => {
+            const error = new Error('Forbidden');
+            error.response = {
+                status: 403,
+                headers: {
+                    'x-ratelimit-reset': '1704070800'
+                }
+            };
+
+            axios.get
+                .mockResolvedValueOnce({
+                    data: {
+                        type: 'User'
+                    }
+                })
+                .mockRejectedValueOnce(error);
+
+            const res = await request(app)
+                .get('/api/search-repos')
+                .query({ username: 'octocat' });
+
+            expect(res.statusCode).toBe(403);
+            expect(res.body.rate_limit).toEqual({
+                limit: null,
+                remaining: null,
+                reset: 1704070800
+            });
+        });
     });
 });

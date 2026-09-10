@@ -232,7 +232,11 @@ app.get('/api/search-repos', async (req, res) => {
         if (error.response?.status === 403) {
             res.status(403).json({ 
                 error: 'API rate limit exceeded or insufficient permissions',
-                reset_time: normalizeRateLimitReset(error.response.headers?.['x-ratelimit-reset'])
+                rate_limit: {
+                    limit: null,
+                    remaining: null,
+                    reset: normalizeRateLimitReset(error.response.headers?.['x-ratelimit-reset'])
+                }
             });
         } else if (error.response?.status === 404) {
             res.status(404).json({ error: 'User not found' });
