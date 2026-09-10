@@ -972,6 +972,12 @@ class EnhancedCaromarApp {
         const automatedMerge = result.automated_merge;
         const fallbackInstructions = result.merge_instructions;
         const fallbackCommands = fallbackInstructions ? fallbackInstructions.steps.join('\n') : '';
+        const escapeHtml = (value) => String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
 
         let detailsHtml = '';
 
@@ -1014,7 +1020,7 @@ class EnhancedCaromarApp {
                     ${fallbackInstructions.repositories.map(repo => `
                         <div class="repo-merge-item">
                             <strong>${repo.name}</strong>
-                            <p>${repo.description || 'No description'}</p>
+                            <p>${escapeHtml(repo.description || 'No description')}</p>
                             <a href="${repo.clone_url}" target="_blank" rel="noopener noreferrer" class="clone-link">Clone URL</a>
                         </div>
                     `).join('')}
