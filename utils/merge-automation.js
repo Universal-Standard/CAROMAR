@@ -4,6 +4,7 @@
 
 const MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1 MB safety limit per file
 const MAX_MERGE_FILES = 250;
+const MAX_MERGE_API_REQUESTS = 200;
 const SUPPORTED_CONTENTS_FILE_MODE = '100644';
 const MERGE_STRATEGIES = {
     SUBFOLDERS: 'subfolders',
@@ -45,6 +46,10 @@ function createMergeLimitError(message) {
     return error;
 }
 
+function estimateMergeRequestCount({ sourceRepositoryCount, totalFiles, targetRepositoryRequestCount = 2 }) {
+    return (sourceRepositoryCount * 2) + (totalFiles * 2) + targetRepositoryRequestCount;
+}
+
 function isRateLimitExceededError(error) {
     return error.response?.status === 403 && String(error.response?.headers?.['x-ratelimit-remaining']) === '0';
 }
@@ -69,15 +74,30 @@ function isSupportedContentsMode(mode) {
 async function buildMergePlan({ axiosClient, headers, sourceRepositories }) {
     const repositories = [];
     let totalFiles = 0;
+    let transferableFiles = 0;
+    const sourceRepositoryCount = sourceRepositories.length;
 
     for (const sourceRepository of sourceRepositories) {
         const { files } = await getRepositoryTree(axiosClient, headers, sourceRepository.full_name);
         totalFiles += files.length;
+        transferableFiles += files.filter(file => isSupportedContentsMode(file.mode) && !exceedsMaxFileSize(file.size)).length;
 
         if (totalFiles > MAX_MERGE_FILES) {
             throw createMergeLimitError(
                 `Automated merge supports at most ${MAX_MERGE_FILES} files per request. ` +
                 `The selected repositories contain ${totalFiles} files.`
+            );
+        }
+
+        const estimatedRequestCount = estimateMergeRequestCount({
+            sourceRepositoryCount,
+            totalFiles: transferableFiles
+        });
+
+        if (estimatedRequestCount > MAX_MERGE_API_REQUESTS) {
+            throw createMergeLimitError(
+                `Automated merge supports at most ${MAX_MERGE_API_REQUESTS} GitHub API requests per automated merge. ` +
+                `The selected repositories would require approximately ${estimatedRequestCount} requests.`
             );
         }
 
@@ -348,11 +368,13 @@ async function mergeRepositoriesIntoTarget({
 module.exports = {
     MAX_FILE_SIZE_BYTES,
     MAX_MERGE_FILES,
+    MAX_MERGE_API_REQUESTS,
     MERGE_STRATEGIES,
     normalizeBase64Content,
     getBase64DecodedByteLength,
     exceedsMaxFileSize,
     encodeContentPath,
+    estimateMergeRequestCount,
     getRepositoryTree,
     buildMergePlan,
     inferRepositoryCapabilities,

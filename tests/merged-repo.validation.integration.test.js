@@ -1,6 +1,6 @@
 const request = require('supertest');
 const axios = require('axios');
-const { MAX_MERGE_FILES } = require('../utils/merge-automation');
+const { MAX_MERGE_API_REQUESTS, MAX_MERGE_FILES } = require('../utils/merge-automation');
 
 jest.mock('axios');
 
@@ -112,7 +112,8 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
                             type: 'blob',
                             path: `file-${index}.txt`,
                             sha: `sha-${index}`,
-                            size: 20
+                            size: 20,
+                            mode: '100755'
                         }))
                     }
                 });
@@ -138,6 +139,52 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
         expect(response.statusCode).toBe(400);
         expect(response.body.error).toContain('Unable to merge');
         expect(response.body.details).toContain(`at most ${MAX_MERGE_FILES} files`);
+        expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('rejects automated merges that would exceed the synchronous GitHub request budget before creating the target repository', async () => {
+        const fileCountThatExceedsRequestBudget = Math.floor((MAX_MERGE_API_REQUESTS - 2) / 2);
+
+        axios.get.mockImplementation(url => {
+            if (url === 'https://api.github.com/repos/octocat/repo-one') {
+                return Promise.resolve({ data: { default_branch: 'main' } });
+            }
+
+            if (url.includes('/git/trees/main?recursive=1')) {
+                return Promise.resolve({
+                    data: {
+                        truncated: false,
+                        tree: Array.from({ length: fileCountThatExceedsRequestBudget }, (_, index) => ({
+                            type: 'blob',
+                            path: `file-${index}.txt`,
+                            sha: `sha-${index}`,
+                            size: 20,
+                            mode: '100644'
+                        }))
+                    }
+                });
+            }
+
+            throw new Error(`Unexpected axios.get URL in test: ${url}`);
+        });
+
+        const response = await request(app)
+            .post('/api/create-merged-repo')
+            .send({
+                name: 'secure-merge',
+                token: validToken,
+                repositories: [
+                    {
+                        name: 'repo-one',
+                        full_name: 'octocat/repo-one',
+                        clone_url: 'https://github.com/octocat/repo-one.git'
+                    }
+                ]
+            });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toContain('Unable to merge');
+        expect(response.body.details).toContain(`at most ${MAX_MERGE_API_REQUESTS} GitHub API requests`);
         expect(axios.post).not.toHaveBeenCalled();
     });
 

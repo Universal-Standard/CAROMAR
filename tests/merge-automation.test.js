@@ -1,11 +1,13 @@
 const {
     MAX_FILE_SIZE_BYTES,
     MAX_MERGE_FILES,
+    MAX_MERGE_API_REQUESTS,
     MERGE_STRATEGIES,
     normalizeBase64Content,
     getBase64DecodedByteLength,
     buildMergePlan,
     encodeContentPath,
+    estimateMergeRequestCount,
     inferRepositoryCapabilities,
     computeRepositoryRiskScore,
     generateAIMergeInsights,
@@ -24,6 +26,10 @@ describe('Merge Automation Utilities', () => {
 
     it('calculates decoded byte length from base64', () => {
         expect(getBase64DecodedByteLength(Buffer.from('hello').toString('base64'))).toBe(5);
+    });
+
+    it('estimates GitHub API requests for an automated merge', () => {
+        expect(estimateMergeRequestCount({ sourceRepositoryCount: 2, totalFiles: 3 })).toBe(12);
     });
 
     it('returns null for malformed base64 payloads', () => {
@@ -87,7 +93,8 @@ describe('Merge Automation Utilities', () => {
                                 type: 'blob',
                                 path: `file-${index}.txt`,
                                 sha: `sha-a-${index}`,
-                                size: 1
+                                size: 1,
+                                mode: '100755'
                             }))
                         }
                     });
@@ -97,7 +104,7 @@ describe('Merge Automation Utilities', () => {
                     return Promise.resolve({
                         data: {
                             tree: [
-                                { type: 'blob', path: 'overflow.txt', sha: 'sha-overflow', size: 1 }
+                                { type: 'blob', path: 'overflow.txt', sha: 'sha-overflow', size: 1, mode: '100755' }
                             ]
                         }
                     });
@@ -115,6 +122,41 @@ describe('Merge Automation Utilities', () => {
                 { name: 'repo-b', full_name: 'octocat/repo-b' }
             ]
         })).rejects.toThrow(`at most ${MAX_MERGE_FILES} files`);
+    });
+
+    it('fails planning when the estimated API request count exceeds the budget', async () => {
+        const fileCountThatExceedsRequestBudget = Math.floor((MAX_MERGE_API_REQUESTS - 2) / 2);
+        const axiosClient = {
+            get: jest.fn(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-a') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/octocat/repo-a/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            tree: Array.from({ length: fileCountThatExceedsRequestBudget }, (_, index) => ({
+                                type: 'blob',
+                                path: `file-${index}.txt`,
+                                sha: `sha-${index}`,
+                                size: 1,
+                                mode: '100644'
+                            }))
+                        }
+                    });
+                }
+
+                throw new Error(`Unexpected get URL: ${url}`);
+            })
+        };
+
+        await expect(buildMergePlan({
+            axiosClient,
+            headers: {},
+            sourceRepositories: [
+                { name: 'repo-a', full_name: 'octocat/repo-a' }
+            ]
+        })).rejects.toThrow(`at most ${MAX_MERGE_API_REQUESTS} GitHub API requests`);
     });
 
     it('continues merging remaining files when one file fails', async () => {
