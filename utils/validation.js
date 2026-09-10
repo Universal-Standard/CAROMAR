@@ -242,6 +242,59 @@ function isValidEmail(email) {
     return emailRegex.test(email);
 }
 
+/**
+ * Validate a repository descriptor used for manual merge instructions.
+ * @param {object} repository - Repository descriptor to validate
+ * @returns {boolean} - True if the descriptor is valid and safe to use
+ */
+function isValidMergeRepository(repository) {
+    if (!repository || typeof repository !== 'object' || Array.isArray(repository)) {
+        return false;
+    }
+
+    const name = typeof repository.name === 'string' ? repository.name.trim() : '';
+    const fullName = typeof repository.full_name === 'string' ? repository.full_name.trim() : '';
+    const cloneUrl = typeof repository.clone_url === 'string' ? repository.clone_url.trim() : '';
+
+    if (!name || !fullName || !cloneUrl) {
+        return false;
+    }
+
+    if (!isValidRepositoryName(name) || name === '.' || name === '..') {
+        return false;
+    }
+
+    const fullNameParts = fullName.split('/');
+    if (fullNameParts.length !== 2) {
+        return false;
+    }
+
+    const [owner, repoName] = fullNameParts;
+    if (!isValidGitHubUsername(owner) || !isValidRepositoryName(repoName) || repoName === '.' || repoName === '..') {
+        return false;
+    }
+
+    if (repoName.toLowerCase() !== name.toLowerCase()) {
+        return false;
+    }
+
+    try {
+        const parsedCloneUrl = new URL(cloneUrl);
+        const expectedPath = `/${owner}/${repoName}.git`;
+
+        return parsedCloneUrl.protocol === 'https:' &&
+            parsedCloneUrl.hostname === 'github.com' &&
+            !parsedCloneUrl.username &&
+            !parsedCloneUrl.password &&
+            !parsedCloneUrl.port &&
+            !parsedCloneUrl.search &&
+            !parsedCloneUrl.hash &&
+            parsedCloneUrl.pathname.toLowerCase() === expectedPath.toLowerCase();
+    } catch {
+        return false;
+    }
+}
+
 module.exports = {
     isValidGitHubUsername,
     isValidRepositoryName,
@@ -253,4 +306,6 @@ module.exports = {
     isValidGitHubCloneUrl,
     validateMergeRepositoryDescriptors,
     isValidEmail
+    isValidEmail,
+    isValidMergeRepository
 };

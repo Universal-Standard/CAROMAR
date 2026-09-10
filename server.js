@@ -33,6 +33,7 @@ const {
     validatePagination,
     validateSort,
     validateMergeRepositoryDescriptors
+    isValidMergeRepository
 } = require('./utils/validation');
 
 const app = express();
@@ -87,6 +88,20 @@ app.use('/api/', apiLimiter);
 // Set view engine - use VIEWS_PATH for Netlify serverless compatibility
 app.set('view engine', 'ejs');
 app.set('views', process.env.VIEWS_PATH || path.join(__dirname, 'views'));
+
+/**
+ * Normalize a GitHub rate limit reset value to Unix seconds.
+ * @param {string|number|undefined|null} value - Raw reset value
+ * @returns {number|null} - Unix timestamp in seconds or null
+ */
+function normalizeRateLimitReset(value) {
+    if (value === undefined || value === null || value === '') {
+        return null;
+    }
+
+    const parsedValue = Number(value);
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+}
 
 /**
  * Routes
@@ -201,8 +216,9 @@ app.get('/api/search-repos', async (req, res) => {
         }));
 
         // Get rate limit info
+        const rateLimitLimit = response.headers['x-ratelimit-limit'];
         const rateLimitRemaining = response.headers['x-ratelimit-remaining'];
-        const rateLimitReset = response.headers['x-ratelimit-reset'];
+        const rateLimitReset = normalizeRateLimitReset(response.headers['x-ratelimit-reset']);
 
         res.json({ 
             repos,
@@ -213,8 +229,9 @@ app.get('/api/search-repos', async (req, res) => {
                 has_more: repos.length === parseInt(per_page)
             },
             rate_limit: {
-                remaining: rateLimitRemaining,
-                reset: rateLimitReset ? new Date(rateLimitReset * 1000) : null
+                limit: rateLimitLimit ? Number(rateLimitLimit) : null,
+                remaining: rateLimitRemaining ? Number(rateLimitRemaining) : null,
+                reset: rateLimitReset
             }
         });
     } catch (error) {
@@ -223,8 +240,11 @@ app.get('/api/search-repos', async (req, res) => {
         if (error.response?.status === 403) {
             res.status(403).json({ 
                 error: 'API rate limit exceeded or insufficient permissions',
-                reset_time: error.response.headers['x-ratelimit-reset'] ? 
-                    new Date(error.response.headers['x-ratelimit-reset'] * 1000) : null
+                rate_limit: {
+                    limit: null,
+                    remaining: null,
+                    reset: normalizeRateLimitReset(error.response.headers?.['x-ratelimit-reset'])
+                }
             });
         } else if (error.response?.status === 404) {
             res.status(404).json({ error: 'User not found' });
@@ -372,6 +392,19 @@ app.post('/api/create-merged-repo', async (req, res) => {
         if (repositories.length > 50) {
             return res.status(400).json({ error: 'Maximum 50 repositories can be merged at once' });
         }
+
+        const normalizedRepositories = repositories.map(repository => ({
+            name: typeof repository?.name === 'string' ? repository.name.trim() : '',
+            full_name: typeof repository?.full_name === 'string' ? repository.full_name.trim() : '',
+            clone_url: typeof repository?.clone_url === 'string' ? repository.clone_url.trim() : '',
+            description: sanitizeString(repository?.description)
+        }));
+
+        if (normalizedRepositories.some(repository => !isValidMergeRepository(repository))) {
+            return res.status(400).json({
+                error: 'Each repository must include a valid name, full_name, and credential-free GitHub clone_url'
+            });
+        }
         
         if (!token || !isValidGitHubToken(token)) {
             return res.status(400).json({ error: 'Valid token is required' });
@@ -392,6 +425,19 @@ app.post('/api/create-merged-repo', async (req, res) => {
             const includesTarget = sanitizedRepositories.some(repo => repo.full_name.toLowerCase() === normalizedTarget);
             if (includesTarget) {
                 return res.status(400).json({ error: 'target_repository cannot also be included in repositories' });
+        logger.info('Creating merged repository', { name, repoCount: repositories.length });
+
+        // Create the new repository
+        const createRepoResponse = await axios.post('https://api.github.com/user/repos', {
+            name,
+            description: description || `Merged repository containing: ${normalizedRepositories.map(r => r.name).join(', ')}`,
+            private: isPrivate,
+            auto_init: true
+        }, {
+            headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'CAROMAR-App'
             }
         }
 
@@ -471,6 +517,24 @@ app.post('/api/create-merged-repo', async (req, res) => {
             merge_strategy: mergeStrategy,
             message: mergeMessage,
             automated_merge: mergeSummary
+            message: 'Repository created successfully. Manual merge steps are still required.',
+            merge_status: 'pending_manual_steps',
+            merge_instructions: {
+                repositories: normalizedRepositories,
+                note: 'These commands are for manual execution. The merge is not complete until you run every step locally and commit the combined result.',
+                interruption_note: 'If you stop partway through, remove any partially cloned repository folder before retrying that repository, then continue with the remaining repositories.',
+                steps: [
+                    'git clone ' + newRepo.clone_url,
+                    'cd ' + sanitizeString(newRepo.name),
+                    ...normalizedRepositories.map(repo => [
+                        'mkdir "' + sanitizeString(repo.name) + '"',
+                        'cd "' + sanitizeString(repo.name) + '"',
+                        'git clone ' + repo.clone_url + ' .',
+                        'rm -rf .git',
+                        'cd ..'
+                    ]).flat()
+                ]
+            }
         });
     } catch (error) {
         logger.error('Error creating merged repository', error);

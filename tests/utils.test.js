@@ -9,6 +9,7 @@ const {
     validateSort,
     isValidGitHubCloneUrl,
     validateMergeRepositoryDescriptors
+    isValidMergeRepository
 } = require('../utils/validation');
 
 describe('Validation Utilities', () => {
@@ -229,6 +230,39 @@ describe('Validation Utilities', () => {
             const allowed = ['updated', 'created', 'name'];
             expect(validateSort('invalid', allowed)).toBe('updated');
             expect(validateSort(null, allowed)).toBe('updated');
+        });
+    });
+
+    describe('isValidMergeRepository', () => {
+        const validRepository = {
+            name: 'repo-name',
+            full_name: 'octocat/repo-name',
+            clone_url: 'https://github.com/octocat/repo-name.git'
+        };
+
+        it('should accept valid GitHub clone descriptors', () => {
+            expect(isValidMergeRepository(validRepository)).toBe(true);
+        });
+
+        it('should reject clone URLs with embedded credentials', () => {
+            expect(isValidMergeRepository({
+                ...validRepository,
+                clone_url: 'https://octocat@github.com/octocat/repo-name.git'
+            })).toBe(false);
+        });
+
+        it('should reject clone URLs with explicit ports', () => {
+            expect(isValidMergeRepository({
+                ...validRepository,
+                clone_url: 'https://github.com:8443/octocat/repo-name.git'
+            })).toBe(false);
+        });
+
+        it('should reject clone URLs that do not match the repository full_name', () => {
+            expect(isValidMergeRepository({
+                ...validRepository,
+                clone_url: 'https://github.com/octocat/other-repo.git'
+            })).toBe(false);
         });
     });
 });
