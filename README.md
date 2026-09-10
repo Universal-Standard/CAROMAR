@@ -171,8 +171,8 @@ Choose between two operation modes:
 - Choose whether to create a new repository or target an existing repository you can push to
 - Choose a merge strategy (subfolders or cohesive)
 - Provide the target repository name/details and execute merge
-- Enter a name for the merged repository
-- Creates the destination repository and provides local/manual merge steps for adding each selected repo as a folder
+- For a new target, enter a name for the merged repository
+- Executes the server-side merge and reports any skipped files or early aborts
 
 ### Step 4: Execute Action
 1. Select your desired repositories using checkboxes
