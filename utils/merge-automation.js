@@ -186,7 +186,7 @@ async function getRepositoryTree(axiosClient, headers, sourceFullName) {
         );
     }
 
-    const files = (treeResponse.data.tree || []).filter(item => item.type === 'blob');
+    const files = (treeResponse.data.tree || []).filter(item => item.type === 'blob' || item.type === 'commit');
 
     return {
         files,
