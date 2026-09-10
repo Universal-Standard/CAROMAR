@@ -258,6 +258,8 @@ Invalid descriptors return `400` with an indexed error message (example: `Reposi
 }
 ```
 
+Clients must inspect `message` and `automated_merge.aborted`/`automated_merge.skippedFiles` before treating a `200` response with `success: true` as a completed automatic merge. Partial and aborted automatic merges still return `200` and require follow-up based on those fields.
+
 ### Get Repository Content
 Get the contents of a specific file or directory in a repository.
 
