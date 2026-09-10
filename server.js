@@ -379,7 +379,9 @@ app.post('/api/create-merged-repo', async (req, res) => {
             if (
                 targetParts.length !== 2 ||
                 !isValidGitHubUsername(targetParts[0]) ||
-                !isValidRepositoryName(targetParts[1])
+                !isValidRepositoryName(targetParts[1]) ||
+                targetParts[1] === '.' ||
+                targetParts[1] === '..'
             ) {
                 return res.status(400).json({ error: 'Valid target_repository (owner/repo) is required' });
             }
