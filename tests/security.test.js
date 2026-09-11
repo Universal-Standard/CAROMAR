@@ -201,6 +201,48 @@ describe('Security Utilities', () => {
             expect(sanitizeObject('string')).toBe('string');
             expect(sanitizeObject(123)).toBe(123);
         });
+
+        it('should preserve top-level arrays as arrays', () => {
+            const arr = [{ name: 'repo-one' }, { name: 'repo-two' }];
+            const sanitized = sanitizeObject(arr);
+
+            expect(Array.isArray(sanitized)).toBe(true);
+            expect(sanitized).toHaveLength(2);
+            expect(sanitized[0].name).toBe('repo-one');
+            expect(sanitized[1].name).toBe('repo-two');
+        });
+
+        it('should preserve nested arrays as arrays (regression: array fields must stay Array.isArray-true)', () => {
+            // Mirrors the real-world shape of POST /api/create-merged-repo's
+            // body: { name, repositories: [ {...}, {...} ], token }.
+            // A naive Object.entries()-based rebuild would silently turn
+            // `repositories` into {"0": {...}, "1": {...}}, breaking every
+            // Array.isArray(repositories) check in server.js.
+            const body = {
+                name: 'merged-repo',
+                repositories: [
+                    { name: 'repo-one', full_name: 'octocat/repo-one' },
+                    { name: 'repo-two', full_name: 'octocat/repo-two' }
+                ],
+                token: 'ghp_' + 'a'.repeat(40)
+            };
+
+            const sanitized = sanitizeObject(body);
+
+            expect(Array.isArray(sanitized.repositories)).toBe(true);
+            expect(sanitized.repositories).toHaveLength(2);
+            expect(sanitized.repositories[0].full_name).toBe('octocat/repo-one');
+            expect(sanitized.repositories[1].full_name).toBe('octocat/repo-two');
+        });
+
+        it('should still strip dangerous keys from objects inside arrays', () => {
+            const arr = [{ name: 'ok', constructor: 'evil' }];
+            const sanitized = sanitizeObject(arr);
+
+            expect(Array.isArray(sanitized)).toBe(true);
+            expect(sanitized[0].name).toBe('ok');
+            expect(Object.hasOwnProperty.call(sanitized[0], 'constructor')).toBe(false);
+        });
     });
 
     describe('isAllowedContentType', () => {
