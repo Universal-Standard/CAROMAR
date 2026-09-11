@@ -101,6 +101,7 @@ Navigate to: **Site settings → Environment variables**
 **Optional Variables:**
 - `NODE_ENV` = `production` (automatically set by Netlify)
 - `LOG_LEVEL` = `INFO` (control logging verbosity)
+- `ALLOWED_ORIGINS` = comma-separated origin allowlist for CORS (leave unset to allow all origins, the historical default — see [environment.md](./environment.md#allowed_origins-optional))
 
 **Note:** Users provide their own GitHub Personal Access Tokens via the application UI.
 
@@ -113,6 +114,12 @@ Applied automatically via `netlify.toml`:
 - `X-Content-Type-Options: nosniff`
 - `X-XSS-Protection: 1; mode=block`
 - `Referrer-Policy: strict-origin-when-cross-origin`
+
+Applied at the application layer via `server.js` (see [SECURITY.md](../../SECURITY.md)):
+- Per-token and per-IP rate limiting on every `/api/*` route
+- Prototype-pollution guard on all request bodies
+- Configurable CORS origin allowlist
+- Content-Type enforcement on state-changing endpoints
 
 ### Caching Strategy
 
@@ -152,13 +159,13 @@ After deployment, verify everything works:
 curl https://your-site.netlify.app/api/health
 ```
 
-**Expected Response:**
+**Expected Response (fields will vary by deploy):**
 ```json
 {
   "status": "healthy",
-  "timestamp": "2026-02-18T00:00:00.000Z",
+  "timestamp": "2026-09-11T00:00:00.000Z",
   "environment": "netlify-serverless",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "uptime": 123.45
 }
 ```
@@ -232,6 +239,19 @@ git push
 - Users must provide their own GitHub Personal Access Tokens
 - Authenticated requests: 5,000/hour
 - Unauthenticated requests: 60/hour
+
+Note this is distinct from CAROMAR's own application-level rate
+limiting (100 requests/15min per IP, plus 60 requests/min per token
+or IP) — see [SECURITY.md](../../SECURITY.md).
+
+#### Requests Blocked Unexpectedly (CORS or 429)
+
+- **CORS:** If you've set `ALLOWED_ORIGINS`, verify the calling origin
+  matches exactly (scheme + host + port). Unset it to restore the
+  allow-all default while debugging.
+- **429 Too Many Requests:** CAROMAR's own per-token/per-IP rate
+  limiter may be throttling rapid repeated calls; wait a minute and
+  retry, or check the `remaining` field in the 429 response body.
 
 #### Function Size Too Large
 
@@ -326,6 +346,10 @@ Netlify automatically deploys when you push to GitHub:
 3. **Pull Request:**
    → Automatic deploy preview linked in PR
 
+`.github/workflows/ci.yml` also runs lint/test/`npm run validate` on
+every push and pull request to `main`, independent of Netlify's own
+build.
+
 ### Deploy Contexts
 
 Configured in `netlify.toml`:
@@ -403,13 +427,24 @@ All critical deployment issues have been resolved:
 2. **Node.js Version Specification** - Added `.nvmrc` and `package.json` engines field
 3. **Build Process** - Updated build command to `npm ci --production=false`
 4. **Views Directory Access** - Configured `VIEWS_PATH` for serverless context
-5. **Environment Variables** - Documented all optional variables
+5. **Environment Variables** - Documented all optional variables, including `ALLOWED_ORIGINS`
 
 ### ✅ Security Enhancements
 - Applied security headers via `netlify.toml`
 - Configured Content Security Policy
-- Implemented rate limiting (100 requests per 15 minutes per IP)
+- Application-level rate limiting: 100 requests/15min per IP
+  (`express-rate-limit`) plus 60 requests/min per token or IP
+  (`utils/security.js`'s `RateLimiter`, wired into every `/api/*` route)
+- Prototype-pollution guard on all request bodies
+- Configurable CORS origin allowlist (`ALLOWED_ORIGINS`)
 - Input validation and sanitization
+
+### ✅ Repository Hygiene
+- Removed stray `desktop.ini` artifacts and a misplaced, unrelated
+  planning document that had been committed to the repo
+- Replaced an irrelevant, overprivileged GitHub Pages workflow with a
+  scoped `contents: read` CI workflow that actually lints/tests/
+  validates this project
 
 ### ✅ Performance Optimizations
 - Static asset caching (1 year for CSS/JS)
@@ -425,6 +460,6 @@ This deployment guide is part of the CAROMAR project and follows the same MIT li
 
 ---
 
-**Last Updated:** February 18, 2026  
-**Status:** ✅ Production Ready  
-**Version:** 1.0.0
+**Last Updated:** 2026-09-11
+**Status:** ✅ Production Ready
+**Version:** 1.2.0
