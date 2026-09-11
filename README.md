@@ -2,7 +2,7 @@
 **C**opy **A** **R**epository **O**r **M**erge **A**ll **R**epositories
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/YOUR-SITE-ID/deploy-status)](https://app.netlify.com/sites/YOUR-SITE-NAME/deploys)
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/US-SPURS/CAROMAR)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/Universal-Standard/CAROMAR)
 
 A powerful web application that allows users to efficiently manage GitHub repositories by either forking individual repositories or merging multiple repositories into a single repository with organized folder structure.
 
@@ -12,7 +12,7 @@ A powerful web application that allows users to efficiently manage GitHub reposi
 
 Deploy CAROMAR to Netlify with one click:
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/US-SPURS/CAROMAR)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/Universal-Standard/CAROMAR)
 
 **[📖 Full Deployment Guide](./docs/deployment/netlify.md)**
 
@@ -45,7 +45,8 @@ Deploy CAROMAR to Netlify with one click:
 - Error handling for failed forks
 
 #### 2. Merge into Single Repository
-- Combines multiple repositories into one organized repository
+- Creates a new destination repository and provides validated, credential-free
+  local git commands to add each selected repo as its own folder
 - Each source repository becomes a main folder
 - Maintains separation while creating unified access
 - Custom naming for the merged repository
@@ -62,6 +63,13 @@ Deploy CAROMAR to Netlify with one click:
 - Intuitive workflow with step-by-step guidance
 - Error notifications and success confirmations
 
+### 🔒 Security
+- Per-token and per-IP rate limiting on every API route
+- Prototype-pollution guard on all request bodies
+- Configurable CORS origin allowlist (`ALLOWED_ORIGINS`)
+- Content-Type enforcement on state-changing endpoints
+- See [SECURITY.md](./SECURITY.md) for the full policy
+
 ---
 
 ## Installation & Setup
@@ -75,7 +83,7 @@ Deploy CAROMAR to Netlify with one click:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/US-SPURS/CAROMAR.git
+   git clone https://github.com/Universal-Standard/CAROMAR.git
    cd CAROMAR
    ```
 
@@ -252,13 +260,24 @@ The application provides several REST API endpoints:
 
 ```
 CAROMAR/
-├── public/                    # Static assets (served from CDN)
+├── .github/
+│   ├── ISSUE_TEMPLATE/       # Bug/feature report templates
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── workflows/
+│       ├── ci.yml            # Lint, test, and deployment validation
+│       └── codeql.yml        # Static security analysis
+├── docs/                     # Full documentation set
+│   ├── README.md             # Documentation index
+│   ├── guides/                # quickstart.md, setup.md, development.md
+│   ├── deployment/            # netlify.md, environment.md
+│   └── api/                   # endpoints.md
+├── public/                   # Static assets (served from CDN)
 │   ├── css/
 │   │   ├── style.css         # Application styling
 │   │   └── icons-fallback.css # Icon fallbacks
 │   ├── js/
-│   │   ├── app.js            # Basic frontend
-│   │   └── enhanced-app.js   # Full-featured frontend
+│   │   ├── app.js            # Simplified reference frontend
+│   │   └── enhanced-app.js   # Full-featured frontend (used in production)
 │   ├── robots.txt            # SEO crawler rules
 │   └── sitemap.xml           # SEO sitemap
 ├── views/
@@ -271,26 +290,31 @@ CAROMAR/
 │   ├── logger.js             # Logging utility
 │   ├── validation.js         # Input validation
 │   ├── performance.js        # Performance monitoring
-│   └── security.js           # Security utilities
+│   └── security.js           # Security utilities (rate limiting, sanitization, CORS)
 ├── scripts/
-│   └── validate-deployment.js # Pre-deploy validation
+│   ├── validate-deployment.js # Pre-deploy validation
+│   └── monitor-deployment.js  # Post-deploy health monitoring
 ├── tests/
-│   ├── app.test.js           # API tests
-│   └── utils.test.js         # Utility tests
+│   ├── app.test.js
+│   ├── merge-contract.test.js
+│   ├── security.test.js
+│   ├── server.test.js
+│   ├── token-security.test.js
+│   └── utils.test.js
 ├── server.js                 # Express application
-├── package.json              # Dependencies & scripts
-├── netlify.toml              # Netlify configuration
-├── .nvmrc                    # Node version
-├── jest.config.js            # Jest configuration
-├── eslint.config.js          # ESLint configuration
-├── .env.example              # Environment template
-├── README.md                 # This file
-├── NETLIFY_DEPLOYMENT.md     # Deployment guide
-├── DEPLOYMENT_FIXES.md       # Fixes summary
-├── SETUP.md                  # Setup guide
-├── DEVELOPMENT.md            # Development guide
-├── API.md                    # API documentation
-└── LICENSE                   # MIT License
+├── package.json               # Dependencies & scripts
+├── package-lock.json
+├── netlify.toml               # Netlify configuration
+├── .nvmrc                     # Node version
+├── jest.config.js
+├── eslint.config.js
+├── .env.example
+├── .gitignore
+├── README.md                  # This file
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── LICENSE
 ```
 
 ---
@@ -309,6 +333,7 @@ npm run lint           # Check code quality
 npm run lint:fix       # Fix linting issues
 npm run build          # Build for production
 npm run validate       # Validate deployment configuration
+npm run monitor        # Health-check a deployed instance
 npm run predeploy      # Pre-deployment checks (lint + test)
 ```
 
@@ -379,10 +404,10 @@ If you encounter any issues or have questions:
    - [API Documentation](./docs/api/endpoints.md)
 
 2. **Search Issues:**
-   - Check [existing issues](https://github.com/US-SPURS/CAROMAR/issues)
+   - Check [existing issues](https://github.com/Universal-Standard/CAROMAR/issues)
 
 3. **Create New Issue:**
-   - [Report a bug](https://github.com/US-SPURS/CAROMAR/issues/new)
+   - [Report a bug](https://github.com/Universal-Standard/CAROMAR/issues/new)
    - Include error messages and steps to reproduce
 
 ### Community
@@ -407,10 +432,8 @@ If you encounter any issues or have questions:
 ✅ **Production Ready**  
 ✅ **Deployment Tested**  
 ✅ **Fully Documented**  
-✅ **Security Hardened**
+✅ **Security Hardened** (rate limiting, prototype-pollution guard, CORS allowlist, and CSP wired in and exercised by tests — see [CHANGELOG.md](./CHANGELOG.md))
 
 ---
 
-**Built with ❤️ by US-SPURS**
-
-**Last Updated:** February 10, 2026
+**Built with ❤️ by Universal-Standard**
