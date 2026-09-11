@@ -5,8 +5,8 @@ Thank you for your interest in contributing to CAROMAR! This document provides g
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js (v16 or higher)
-- npm (v8 or higher)
+- Node.js (v18 or higher)
+- npm (v9 or higher)
 - Git
 - GitHub account
 
@@ -156,7 +156,8 @@ npm run test:coverage
 - Implement proper error handling
 - Use appropriate HTTP status codes
 - Include input validation
-- Add rate limiting for new endpoints
+- Add rate limiting for new endpoints (see `utils/security.js`'s
+  `RateLimiter` and the `tokenAwareRateLimit` middleware in `server.js`)
 
 ### Frontend Development
 - Use the existing class-based architecture
@@ -176,10 +177,11 @@ npm run test:coverage
 - Implement proper error handling
 
 ### Input Validation
-- Sanitize all user inputs
+- Sanitize all user inputs (`utils/validation.js`, `utils/security.js`)
 - Validate on both client and server
 - Use parameterized queries
-- Implement CSRF protection where needed
+- Implement CSRF protection where needed (`isAllowedOrigin` /
+  `ALLOWED_ORIGINS` — see `docs/deployment/environment.md`)
 
 ## 🚀 Release Process
 
