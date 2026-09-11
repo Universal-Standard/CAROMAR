@@ -19,7 +19,7 @@ Authorization: Bearer ghp_your_token_here
 ```
 
 **For POST requests:**
-Include the token in the JSON request body.
+Include the token in the JSON request body. `Content-Type: application/json` is required — requests with any other Content-Type receive `415 Unsupported Media Type`.
 
 Required scopes:
 - `repo` - Full control of private repositories
@@ -36,9 +36,24 @@ Get the current status of the API server.
 ```json
 {
   "status": "healthy",
-  "timestamp": "2024-01-01T00:00:00.000Z",
+  "timestamp": "2026-09-11T00:00:00.000Z",
+  "environment": "netlify-serverless",
   "uptime": 123.456,
-  "version": "1.0.0"
+  "version": "1.2.0"
+}
+```
+
+### Performance Metrics
+Get aggregated request performance metrics (uptime monitoring / debugging).
+
+**Endpoint:** `GET /metrics`
+
+**Response:**
+```json
+{
+  "summary": { "totalRequests": 4213, "errorRate": 0.004, "avgDuration": 87 },
+  "endpoints": { "GET /api/search-repos": { "count": 512, "avgDuration": 210 } },
+  "timestamp": "2026-09-11T00:00:00.000Z"
 }
 ```
 
@@ -169,6 +184,12 @@ Create a new repository that will contain multiple repositories as subdirectorie
 
 **Endpoint:** `POST /create-merged-repo`
 
+Each entry in `repositories` is validated (`isValidMergeRepository`): it
+must include a `name`, an `owner/repo`-shaped `full_name` matching that
+name, and a bare `https://github.com/<owner>/<repo>.git` `clone_url`
+with no embedded credentials, query string, or fragment. Invalid
+entries cause the whole request to be rejected with `400`.
+
 **Request Body:**
 ```json
 {
@@ -278,6 +299,35 @@ Perform analytics on a collection of repositories.
 }
 ```
 
+### Compare Repositories
+Compare two or more repositories.
+
+**Endpoint:** `POST /compare-repos`
+
+**Request Body:**
+```json
+{
+  "repositories": [ /* 2 repos for "two", 2+ for "multiple"/"best" */ ],
+  "mode": "two",       // "two" | "multiple" | "best"
+  "criteria": "stars"  // only used when mode is "best"
+}
+```
+
+**Response (`mode: "two"` example):**
+```json
+{
+  "success": true,
+  "mode": "two",
+  "comparison": {
+    "names": { "repo1": "owner/repo-a", "repo2": "owner/repo-b" },
+    "metrics": { "stars": { "repo1": 120, "repo2": 80, "winner": "owner/repo-a" } },
+    "attributes": { "language": { "repo1": "JavaScript", "repo2": "Python" } },
+    "similarity": 62
+  },
+  "timestamp": "2026-09-11T00:00:00.000Z"
+}
+```
+
 ## Error Responses
 
 All endpoints return errors in the following format:
@@ -294,15 +344,19 @@ Common HTTP status codes:
 - `401` - Unauthorized (invalid or missing token)
 - `403` - Forbidden (insufficient permissions or rate limit exceeded)
 - `404` - Not Found (resource not found)
+- `415` - Unsupported Media Type (POST body Content-Type is not `application/json`)
 - `422` - Unprocessable Entity (validation error)
-- `429` - Too Many Requests (rate limit exceeded)
+- `429` - Too Many Requests (CAROMAR's own rate limit exceeded)
 - `500` - Internal Server Error
 
 ## Rate Limiting
 
-The API implements rate limiting to prevent abuse:
-- 100 requests per 15 minutes per IP address
-- GitHub API rate limits also apply (5000 requests per hour for authenticated requests)
+CAROMAR applies two layers of its own rate limiting, independent of GitHub's:
+
+- **Per-IP (coarse):** 100 requests per 15 minutes per IP address, applied to all `/api/*` routes (`express-rate-limit`).
+- **Per-token (fine):** 60 requests per minute, keyed by a SHA-256 hash of the caller's bearer/body token when present, otherwise by IP (`utils/security.js`'s `RateLimiter`). A `429` response from this layer includes a `remaining` field.
+
+GitHub's own API rate limits also apply on top of these (5,000 requests/hour for authenticated requests, 60/hour unauthenticated) — see the `rate_limit` field returned by `/user` and `/search-repos`.
 
 ## Security Best Practices
 
@@ -312,6 +366,8 @@ The API implements rate limiting to prevent abuse:
 4. Regenerate tokens periodically
 5. Use fine-grained tokens with minimal required permissions
 6. Monitor your GitHub security settings regularly
+
+See [SECURITY.md](../../SECURITY.md) for the full security policy.
 
 ## Examples
 
@@ -342,5 +398,5 @@ console.log(data.repos);
 ## Support
 
 For issues and questions:
-- GitHub Issues: https://github.com/US-SPURS/CAROMAR/issues
-- Documentation: https://github.com/US-SPURS/CAROMAR
+- GitHub Issues: https://github.com/Universal-Standard/CAROMAR/issues
+- Documentation: [docs/README.md](../README.md)
