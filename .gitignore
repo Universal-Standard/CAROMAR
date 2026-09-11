@@ -7,3 +7,19 @@ build/
 temp/
 tmp/
 coverage/
+
+# Windows Explorer / OS artifacts
+desktop.ini
+Thumbs.db
+ehthumbs.db
+$RECYCLE.BIN/
+*.stackdump
+
+# Editor artifacts
+.idea/
+*.swp
+*.swo
+*~
+
+# Netlify local dev
+.netlify/
