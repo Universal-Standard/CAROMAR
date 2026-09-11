@@ -5,6 +5,76 @@ All notable changes to the CAROMAR project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-11
+
+### Fixed
+
+#### Security Module Actually Wired In
+- **`utils/security.js` is now imported and used by `server.js`.** It was
+  fully built and unit-tested (29 cases in `tests/security.test.js`)
+  since 1.1.0, but never `require()`'d anywhere in the running
+  application — meaning the protections this CHANGELOG and SECURITY.md
+  described (per-token rate limiting, prototype-pollution guarding,
+  CORS origin validation) were not actually in effect. This release
+  closes that gap:
+  - `sanitizeObject` now runs on every parsed JSON/urlencoded request
+    body before any route handler sees it (prototype-pollution guard).
+  - A new `tokenAwareRateLimit` middleware, backed by `RateLimiter` and
+    `simpleHash`, applies per-token (SHA-256 hash of the bearer/body
+    token — the raw token itself is never retained) or per-IP rate
+    limiting to every `/api/*` route, in addition to the existing
+    coarse IP-based `express-rate-limit`.
+  - CORS now uses a real origin callback backed by `isAllowedOrigin`
+    and a new `ALLOWED_ORIGINS` environment variable, replacing the
+    previous bare `cors()` (which reflected any origin). Default
+    behavior when `ALLOWED_ORIGINS` is unset is unchanged (all origins
+    allowed) to avoid a breaking change for existing deployments.
+  - `isAllowedContentType` now enforces `Content-Type: application/json`
+    on all state-changing `POST` endpoints. Verified against
+    `public/js/enhanced-app.js`, which already sends this header on
+    every POST call, so no frontend changes were required.
+
+#### Repository Hygiene
+- Removed 11 stray `desktop.ini` Windows Explorer artifacts that had
+  been committed across the repo root, `.github/`, `.github/workflows/`,
+  `functions/`, `public/`, `public/css/`, `public/js/`, `scripts/`,
+  `tests/`, `utils/`, and `views/`. `.gitignore` now ignores
+  `desktop.ini`, `Thumbs.db`, and common editor/OS artifacts so they
+  can't reappear.
+- Removed `SWARM_CONSOLIDATION_PACKET.md`, a misplaced planning
+  document for an unrelated project (a separate SWARM/ATLANTIS-AI
+  monorepo migration) that did not describe CAROMAR.
+- Removed `.github/workflows/jekyll-gh-pages.yml`, a leftover default
+  GitHub Pages template irrelevant to this Node.js/Express/Netlify
+  project. It also granted the `GITHUB_TOKEN` broad write permissions
+  (`contents`, `packages`, `issues`, `security-events`, etc.) that the
+  project never needed. Replaced by `.github/workflows/ci.yml`, which
+  runs lint, tests, `npm run validate`, and a build check with
+  `contents: read` only.
+
+#### Stale Cross-References
+- `package.json` `repository`/`bugs`/`homepage` URLs updated from the
+  old `US-SPURS/CAROMAR` location to `Universal-Standard/CAROMAR`.
+- `README.md`: all GitHub links updated to `Universal-Standard/CAROMAR`;
+  the "Project Structure" tree — which still listed root-level
+  `NETLIFY_DEPLOYMENT.md`, `DEPLOYMENT_FIXES.md`, `SETUP.md`,
+  `DEVELOPMENT.md`, and `API.md` from before the Feb 18 docs
+  reorganization — now reflects the actual current layout (`docs/`,
+  the full `tests/` suite, `.github/workflows/`, `package-lock.json`).
+- `CONTRIBUTING.md` prerequisite corrected from "Node.js v16+" to
+  "Node.js v18+" to match `package.json`'s `engines.node` requirement.
+- `.env.example` rewritten to match what `server.js` actually reads:
+  added the new `ALLOWED_ORIGINS` and `NODE_ENV` variables, and
+  clearly labeled `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`/
+  `SESSION_SECRET` as reserved for a not-yet-implemented OAuth/session
+  feature rather than implying they're required today.
+
+### Added
+- `.github/workflows/ci.yml` — lint, test, `npm run validate`, and
+  `npm run build` on every push/PR to `main`.
+- `ALLOWED_ORIGINS` environment variable for configuring the CORS
+  allowlist in production.
+
 ## [1.1.0] - 2024-12-03
 
 ### Added
@@ -252,6 +322,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release Notes
 
+### Version 1.2.0 Highlights
+
+This release is a **production-hardening pass** focused on closing the
+gap between what the project *documented* and what it actually *did*,
+and on repository hygiene:
+
+1. **Security module wired in**: `utils/security.js` protections
+   (rate limiting, prototype-pollution guard, CORS allowlist,
+   content-type enforcement) now actually run in `server.js`.
+2. **Repository cleanup**: removed junk files (`desktop.ini` × 11),
+   a misplaced unrelated planning document, and an irrelevant,
+   overprivileged CI workflow.
+3. **Stale references fixed**: org URLs, project-structure docs, and
+   Node version requirements now match reality across `package.json`,
+   `README.md`, `CONTRIBUTING.md`, and `.env.example`.
+4. **New CI**: `.github/workflows/ci.yml` actually validates the
+   project on every push/PR.
+
+No breaking changes to API request/response shapes. The CORS default
+(no `ALLOWED_ORIGINS` set) is unchanged from prior behavior.
+
 ### Version 1.1.0 Highlights
 
 This release focuses on **production readiness** with significant improvements in:
@@ -264,7 +355,7 @@ This release focuses on **production readiness** with significant improvements i
 
 ### Upgrade Guide
 
-Upgrading from 1.0.0 to 1.1.0:
+Upgrading to 1.2.0:
 
 ```bash
 # Pull latest changes
@@ -280,7 +371,9 @@ npm test
 npm start
 ```
 
-No breaking changes. All existing functionality remains compatible.
+No breaking changes. If you deploy behind a specific set of frontend
+origins, set `ALLOWED_ORIGINS` (comma-separated) in your environment;
+otherwise CORS behavior is unchanged from 1.1.0.
 
 ### Migration Notes
 
@@ -296,7 +389,7 @@ None at this time.
 
 ### Future Plans
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for planned features and enhancements.
+See [docs/guides/development.md](docs/guides/development.md) for planned features and enhancements.
 
 ---
 
