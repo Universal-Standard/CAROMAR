@@ -10,7 +10,9 @@ Currently, we support the latest version of CAROMAR with security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
+| 1.2.x   | :white_check_mark: |
+| 1.1.x   | :white_check_mark: |
+| 1.0.x   | :x:                |
 
 ## Security Features
 
@@ -26,8 +28,8 @@ CAROMAR implements comprehensive input validation:
 
 ### 2. Rate Limiting
 
-- **Application-Level**: 100 requests per 15 minutes per IP address
-- **Per-Token Limiting**: 60 requests per minute per GitHub token
+- **Application-Level (IP)**: 100 requests per 15 minutes per IP address (`express-rate-limit`, applied to all `/api/*` routes)
+- **Per-Token Limiting**: 60 requests per minute per identifier — a SHA-256 hash of the caller's bearer/body token when present, otherwise their IP (`utils/security.js`'s `RateLimiter`, applied via the `tokenAwareRateLimit` middleware in `server.js` to every API route)
 - **Automatic Cleanup**: Old rate limit entries are automatically cleaned up
 - **Configurable Limits**: Rate limits can be adjusted based on deployment needs
 
@@ -42,9 +44,10 @@ CAROMAR uses Helmet.js to set secure HTTP headers:
 
 ### 4. CORS Configuration
 
-- Configurable CORS policy
-- Origin validation for cross-origin requests
-- Preflight request handling
+- CORS origin is evaluated per-request via `utils/security.js`'s `isAllowedOrigin`
+- Configurable allowlist via the `ALLOWED_ORIGINS` environment variable (comma-separated origins, supports trailing-`*` prefix wildcards)
+- When `ALLOWED_ORIGINS` is unset, all origins are allowed (backward-compatible default; recommended to set explicitly in production — see [docs/deployment/environment.md](docs/deployment/environment.md#allowed_origins-optional))
+- Preflight request handling via the `cors` middleware
 
 ### 5. Token Security
 
@@ -52,26 +55,33 @@ CAROMAR uses Helmet.js to set secure HTTP headers:
 - **No Server Persistence**: Tokens are never stored on the server
 - **HTTPS Required**: All token transmission must use HTTPS in production
 - **Scope Validation**: Token permissions are validated before operations
+- **Hashed, Not Raw, for Rate Limiting**: When a token is used as a rate-limit identifier, only a truncated SHA-256 hash (`simpleHash`) is retained in memory — never the raw token
 
 ### 6. Protection Against Common Vulnerabilities
 
 #### XSS (Cross-Site Scripting)
 - Input sanitization removes `<` and `>` characters
-- Suspicious pattern detection for javascript:, data: protocols
+- Suspicious pattern detection for javascript:, data: protocols (`containsSuspiciousPatterns`)
 - Event handler detection and blocking
 
 #### CSRF (Cross-Site Request Forgery)
-- Origin header validation
+- Origin header validation via the CORS allowlist described above
 - Same-origin policy enforcement
 
 #### Prototype Pollution
-- Object sanitization removes dangerous keys (__proto__, constructor, prototype)
-- Nested object protection
+- `sanitizeObject` (from `utils/security.js`) runs on every parsed JSON/urlencoded request body, before any route handler executes, removing dangerous keys (`__proto__`, `constructor`, `prototype`) recursively
 
 #### SQL Injection
 - Not applicable (no database, uses GitHub API only)
 
-### 7. GitHub API Security
+#### Unexpected Request Bodies
+- `isAllowedContentType` enforces `Content-Type: application/json` on all state-changing `POST` endpoints (`/api/fork-repo`, `/api/create-merged-repo`, `/api/analyze-repos`, `/api/compare-repos`)
+
+### 7. Merge-Instruction Safety
+
+- Repository descriptors supplied to `POST /api/create-merged-repo` are validated by `isValidMergeRepository` (`utils/validation.js`), which requires a valid name, an `owner/repo` `full_name` that matches it, and a `clone_url` that is a bare, credential-free `https://github.com/<owner>/<repo>.git` URL — preventing injection of arbitrary hosts, embedded credentials, or shell-unsafe values into the generated manual merge commands.
+
+### 8. GitHub API Security
 
 - User-Agent headers for API identification
 - Rate limit monitoring and display
@@ -114,13 +124,14 @@ CAROMAR uses Helmet.js to set secure HTTP headers:
        # ... other configurations
    }
    ```
+   Netlify deployments get HTTPS automatically; this only applies to self-hosted deployments.
 
 2. **Environment Variables**
    ```bash
    # .env file (never commit this!)
    PORT=3000
    NODE_ENV=production
-   SESSION_SECRET=your_random_secret_here
+   ALLOWED_ORIGINS=https://your-production-domain.netlify.app
    ```
 
 3. **Secure Headers**
@@ -186,9 +197,22 @@ If you discover a security vulnerability in CAROMAR, please report it responsibl
 
 ## Security Audit History
 
-### Current Version (1.0.0)
+### v1.2.0 (2026-09-11) — Security Module Wiring
 
-- **Date**: December 2024
+- **Finding**: `utils/security.js` (rate limiting, prototype-pollution
+  guard, CORS validation, content-type validation) had existed since
+  v1.1.0 with full unit test coverage, but was never imported by
+  `server.js` — the protections described in this document were not
+  actually enforced at runtime.
+- **Fix**: `server.js` now imports and applies every export of
+  `utils/security.js`. See [CHANGELOG.md](CHANGELOG.md) for the full
+  list of changes.
+- **Additional hygiene**: removed stray `desktop.ini` artifacts, a
+  misplaced unrelated planning document, and an overprivileged,
+  irrelevant CI workflow that had accumulated in the repository.
+
+### v1.0.0 (December 2024)
+
 - **Type**: Comprehensive code review and security audit
 - **Findings**: 0 critical, 0 high, 0 medium, 0 low
 - **Tools Used**:
@@ -200,7 +224,7 @@ If you discover a security vulnerability in CAROMAR, please report it responsibl
 
 ### Security Features Added
 
-1. **Security Module** (`utils/security.js`)
+1. **Security Module** (`utils/security.js`) — now wired into `server.js` as of v1.2.0
    - Suspicious pattern detection
    - URL validation
    - Rate limiting
@@ -213,7 +237,8 @@ If you discover a security vulnerability in CAROMAR, please report it responsibl
    - Health status evaluation
 
 3. **Comprehensive Test Suite**
-   - 75 tests covering security scenarios
+   - Tests covering security scenarios (`tests/security.test.js`,
+     `tests/token-security.test.js`)
    - Input validation edge cases
    - Rate limiting tests
    - Sanitization tests
@@ -230,13 +255,18 @@ Before submitting a pull request:
 - [ ] Error messages don't leak sensitive information
 - [ ] Rate limiting is respected
 - [ ] HTTPS is used for external requests
+- [ ] If you add a security control, verify it is actually invoked
+      somewhere in `server.js` (or another live code path) — not just
+      exported and unit-tested. `npm run validate` and `.github/workflows/ci.yml`
+      run tests and lint on every PR, but neither can detect an unused
+      export.
 
 ## Third-Party Dependencies
 
 CAROMAR uses the following security-focused dependencies:
 
 - **helmet**: ^8.1.0 - Secure HTTP headers
-- **express-rate-limit**: ^8.1.0 - Rate limiting
+- **express-rate-limit**: ^8.1.1 - Rate limiting
 - **cors**: ^2.8.5 - CORS configuration
 - **dotenv**: ^16.3.1 - Environment variable management
 
@@ -245,7 +275,7 @@ CAROMAR uses the following security-focused dependencies:
 - Dependencies are regularly updated
 - Security patches are applied immediately
 - Breaking changes are carefully evaluated
-- `npm audit` is run on every change
+- `npm audit` is run on every change (also automated in `.github/workflows/ci.yml`)
 
 ## Compliance
 
@@ -286,5 +316,5 @@ For security questions or concerns, please open an issue on GitHub (for non-sens
 
 ---
 
-**Last Updated**: December 2024
-**Version**: 1.0.0
+**Last Updated**: 2026-09-11
+**Version**: 1.2.0
