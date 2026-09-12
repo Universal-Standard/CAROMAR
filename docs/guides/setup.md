@@ -6,8 +6,8 @@ This guide will help you get CAROMAR up and running quickly.
 
 Before you begin, ensure you have the following installed:
 
-- **Node.js** (v14 or higher) - [Download here](https://nodejs.org/)
-- **npm** (comes with Node.js)
+- **Node.js** (v18 or higher) - [Download here](https://nodejs.org/)
+- **npm** (v9 or higher, comes with Node.js)
 - A **GitHub Personal Access Token** - [Create one here](https://github.com/settings/tokens)
 
 ## Quick Start
@@ -15,7 +15,7 @@ Before you begin, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/US-SPURS/CAROMAR.git
+git clone https://github.com/Universal-Standard/CAROMAR.git
 cd CAROMAR
 ```
 
@@ -29,19 +29,28 @@ This will install all required packages including:
 - Express.js (web server)
 - Axios (HTTP client)
 - EJS (templating engine)
+- Helmet, cors, express-rate-limit (security middleware)
 - ESLint (code quality)
 - Jest (testing framework)
 
 ### 3. Configure Environment (Optional)
 
-The application comes with sensible defaults in the `.env` file. You can customize these if needed:
+CAROMAR runs with zero configuration out of the box. If you want to
+customize it, copy the example file and edit it:
+
+```bash
+cp .env.example .env
+```
 
 ```bash
 # Server Configuration
-PORT=3000                    # Port to run the server on
-NODE_ENV=production          # Environment mode
-LOG_LEVEL=INFO              # Logging level (INFO, DEBUG, WARN, ERROR)
+PORT=3000                    # Port to run the local server on
+NODE_ENV=development         # development | production | test
+LOG_LEVEL=INFO               # Logging level (DEBUG, INFO, WARN, ERROR)
+ALLOWED_ORIGINS=             # Comma-separated CORS allowlist; leave blank to allow all
 ```
+
+See [docs/deployment/environment.md](../deployment/environment.md) for the full reference.
 
 ### 4. Start the Application
 
@@ -75,7 +84,7 @@ npm run dev
 4. Enter a GitHub username to search for repositories
 5. Select repositories and choose an operation:
    - **Fork Individual Repositories** - Fork each selected repo to your account
-   - **Merge into Single Repository** - Create one repo containing all selected repos as folders
+   - **Merge into Single Repository** - Create a destination repo and get validated, credential-free local git commands to add each selected repo as its own folder
 
 ## Features
 
@@ -139,24 +148,41 @@ CAROMAR/
 │   ├── css/
 │   │   ├── style.css              # Main styles
 │   │   └── icons-fallback.css     # Icon fallbacks
-│   └── js/
-│       ├── app.js                 # Basic frontend implementation
-│       └── enhanced-app.js        # Full-featured frontend (used in production)
+│   ├── js/
+│   │   ├── app.js                 # Simplified reference frontend
+│   │   └── enhanced-app.js        # Full-featured frontend (used in production)
+│   ├── robots.txt
+│   └── sitemap.xml
 ├── views/
 │   └── index.ejs                  # Main HTML template
+├── functions/
+│   └── server.js                  # Netlify serverless wrapper
 ├── utils/
 │   ├── logger.js                  # Logging utility
 │   ├── validation.js              # Input validation
 │   ├── analytics.js               # Repository analytics
-│   └── comparison.js              # Repository comparison
+│   ├── comparison.js              # Repository comparison
+│   ├── performance.js             # Performance monitoring
+│   └── security.js                # Rate limiting, sanitization, CORS
 ├── tests/
-│   ├── app.test.js                # API endpoint tests
-│   └── utils.test.js              # Utility function tests
+│   ├── app.test.js
+│   ├── merge-contract.test.js
+│   ├── security.test.js
+│   ├── server.test.js
+│   ├── token-security.test.js
+│   └── utils.test.js
+├── scripts/
+│   ├── validate-deployment.js
+│   └── monitor-deployment.js
+├── docs/                           # Full documentation (guides, deployment, api)
 ├── server.js                       # Express server
 ├── package.json                    # Dependencies
+├── package-lock.json
+├── netlify.toml                    # Netlify configuration
+├── .nvmrc                          # Node version
 ├── jest.config.js                  # Jest testing configuration
 ├── eslint.config.js                # ESLint configuration
-├── .env                           # Environment configuration
+├── .env.example                    # Environment variable template
 ├── LICENSE                         # MIT License
 └── README.md                       # Main documentation
 ```
@@ -175,7 +201,10 @@ PORT=3001
 - **Authenticated requests**: 5,000 per hour
 - **Unauthenticated requests**: 60 per hour
 
-Always use a personal access token for better rate limits.
+Always use a personal access token for better rate limits. Note that
+CAROMAR also applies its own application-level rate limiting (100
+requests/15min per IP, plus 60 requests/min per token or IP) — see
+[SECURITY.md](../../SECURITY.md).
 
 ### Token Validation Fails
 
@@ -198,14 +227,14 @@ If Font Awesome icons don't load, the app automatically falls back to emoji icon
 
 For issues, questions, or feature requests:
 
-1. Check the [main README](./README.md)
-2. Review the [API documentation](./API.md)
-3. Search [existing issues](https://github.com/US-SPURS/CAROMAR/issues)
-4. Create a [new issue](https://github.com/US-SPURS/CAROMAR/issues/new)
+1. Check the [main README](../../README.md)
+2. Review the [API documentation](../api/endpoints.md)
+3. Search [existing issues](https://github.com/Universal-Standard/CAROMAR/issues)
+4. Create a [new issue](https://github.com/Universal-Standard/CAROMAR/issues/new)
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to contribute to CAROMAR.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines on how to contribute to CAROMAR.
 
 ## License
 

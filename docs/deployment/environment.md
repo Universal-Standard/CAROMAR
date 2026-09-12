@@ -29,13 +29,20 @@ However, for advanced features and production optimization, you can configure th
 - **Description:** Port number for local server
 - **Example:** `PORT=3001`
 - **When to use:** Local development when port 3000 is occupied
+- **Note:** Ignored on Netlify, which manages its own port for serverless functions.
 
 #### `NODE_ENV` (Optional)
 - **Default:** `development`
 - **Values:** `development` | `production` | `test`
-- **Description:** Application environment mode
+- **Description:** Application environment mode. In `development`, unhandled-error responses include the underlying error message; in any other value they return a generic message.
 - **Example:** `NODE_ENV=production`
 - **When to use:** Automatically set by Netlify, but can override locally
+
+#### `ALLOWED_ORIGINS` (Optional)
+- **Default:** Unset (all origins allowed — matches CAROMAR's historical behavior)
+- **Description:** Comma-separated allowlist of origins permitted to call the API cross-origin. Actually enforced by `server.js`'s CORS configuration via `utils/security.js`'s `isAllowedOrigin`.
+- **Example:** `ALLOWED_ORIGINS=https://caromar.netlify.app,https://app.example.com`
+- **When to use:** Recommended for production deployments that don't need to be embeddable/callable from arbitrary origins. Supports trailing-`*` prefix wildcards (e.g. `https://*.example.com*`).
 
 ### GitHub OAuth (Future Feature - Not Implemented)
 
@@ -44,14 +51,14 @@ However, for advanced features and production optimization, you can configure th
 - **Description:** GitHub OAuth App Client ID
 - **Example:** `GITHUB_CLIENT_ID=Iv1.abc123def456`
 - **When to use:** When implementing OAuth authentication flow
-- **Status:** Placeholder for future enhancement
+- **Status:** Placeholder for future enhancement — not read anywhere in `server.js` today.
 
 #### `GITHUB_CLIENT_SECRET` (Optional)
 - **Default:** Not used
 - **Description:** GitHub OAuth App Client Secret
 - **Example:** `GITHUB_CLIENT_SECRET=abc123...`
 - **When to use:** When implementing OAuth authentication flow
-- **Status:** Placeholder for future enhancement
+- **Status:** Placeholder for future enhancement — not read anywhere in `server.js` today.
 - **⚠️ Security:** Never commit this to version control
 
 ### Session Management (Future Feature - Not Implemented)
@@ -61,7 +68,7 @@ However, for advanced features and production optimization, you can configure th
 - **Description:** Secret key for session encryption
 - **Example:** `SESSION_SECRET=your-super-secret-random-string-here`
 - **When to use:** When implementing server-side sessions
-- **Status:** Placeholder for future enhancement
+- **Status:** Placeholder for future enhancement — not read anywhere in `server.js` today.
 - **⚠️ Security:** Use cryptographically random string
 
 ### Logging
@@ -69,7 +76,7 @@ However, for advanced features and production optimization, you can configure th
 #### `LOG_LEVEL` (Optional)
 - **Default:** `INFO`
 - **Values:** `DEBUG` | `INFO` | `WARN` | `ERROR`
-- **Description:** Logging verbosity level
+- **Description:** Logging verbosity level. Only `DEBUG` currently changes behavior — it enables `logger.debug()` output (see `utils/logger.js`); all other levels log at their own call sites regardless of this setting.
 - **Example:** `LOG_LEVEL=DEBUG`
 - **When to use:** Debugging or reducing log noise in production
 
@@ -77,7 +84,7 @@ However, for advanced features and production optimization, you can configure th
 
 #### `NETLIFY` (Auto-set by Netlify)
 - **Default:** Not set locally
-- **Description:** Indicates running in Netlify environment
+- **Description:** Indicates running in Netlify environment; used by the `/api/health` endpoint to report `environment: "netlify-serverless"` vs `"local"`.
 - **Example:** `NETLIFY=true`
 - **When to use:** Automatically set - do not manually configure
 
@@ -104,6 +111,7 @@ However, for advanced features and production optimization, you can configure th
    PORT=3000
    NODE_ENV=development
    LOG_LEVEL=DEBUG
+   ALLOWED_ORIGINS=
 
    # GitHub OAuth (Placeholder for future)
    # GITHUB_CLIENT_ID=
@@ -134,6 +142,7 @@ The application uses `dotenv` package to load `.env` file:
 PORT=3000
 NODE_ENV=development
 LOG_LEVEL=DEBUG
+ALLOWED_ORIGINS=
 
 # Future OAuth Configuration (not implemented)
 # GITHUB_CLIENT_ID=your_client_id
@@ -156,6 +165,7 @@ LOG_LEVEL=DEBUG
 3. Click **"Add a variable"**
 4. Add variables:
    - `NODE_ENV` = `production` (auto-set)
+   - `ALLOWED_ORIGINS` = your production frontend origin(s), if you want to restrict CORS
    - Other variables as needed
 
 #### Method 2: netlify.toml
@@ -193,6 +203,7 @@ netlify env:import .env
 
 **Optional enhancements:**
 - `LOG_LEVEL=INFO` - Control logging verbosity
+- `ALLOWED_ORIGINS` - Restrict CORS to specific origins
 - Future: OAuth credentials for enhanced authentication
 
 ---
@@ -207,6 +218,9 @@ NODE_ENV=production
 
 # Logging
 LOG_LEVEL=INFO
+
+# CORS allowlist (recommended for production)
+ALLOWED_ORIGINS=https://your-production-domain.netlify.app
 
 # Future OAuth (when implemented)
 # GITHUB_CLIENT_ID=production_client_id
@@ -225,6 +239,7 @@ LOG_LEVEL=INFO
 - [ ] Use different secrets for dev/staging/prod
 - [ ] Limit access to production environment variables
 - [ ] Enable Netlify's secret scanning
+- [ ] Set `ALLOWED_ORIGINS` if the API should not be callable from arbitrary origins
 
 ### Performance Optimization
 
@@ -346,6 +361,14 @@ Or use environment variable directly:
 PORT=3001 npm start
 ```
 
+### Issue: Requests Blocked by CORS
+
+If you set `ALLOWED_ORIGINS` and requests start failing with CORS
+errors, double-check the origin string matches exactly (scheme +
+host + port), including no trailing slash. Leave `ALLOWED_ORIGINS`
+unset to restore the previous "allow all origins" behavior while
+debugging.
+
 ### Issue: Secrets Exposed in Logs
 
 - Never log `process.env` in production
@@ -418,12 +441,12 @@ netlify env:list
 
 For configuration issues:
 1. Check this guide
-2. Review [SETUP.md](./SETUP.md)
-3. See [NETLIFY_DEPLOYMENT.md](./NETLIFY_DEPLOYMENT.md)
-4. Create an issue: https://github.com/US-SPURS/CAROMAR/issues
+2. Review [Setup Guide](../guides/setup.md)
+3. See [Netlify Deployment Guide](./netlify.md)
+4. Create an issue: https://github.com/Universal-Standard/CAROMAR/issues
 
 ---
 
-**Last Updated:** February 10, 2026  
-**Version:** 1.0.0  
+**Last Updated:** 2026-09-11
+**Version:** 1.2.0
 **Status:** ✅ Production Ready

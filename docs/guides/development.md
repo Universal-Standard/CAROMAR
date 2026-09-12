@@ -8,15 +8,19 @@ CAROMAR is built as a modern web application with a clean separation between fro
 
 ```
 server.js
-├── Rate Limiting (express-rate-limit)
-├── Authentication Middleware
+├── Security Middleware (helmet, cors allowlist, prototype-pollution guard)
+├── Rate Limiting (express-rate-limit per-IP + utils/security.js RateLimiter per-token)
 ├── API Routes
 │   ├── /api/user - User information and validation
 │   ├── /api/validate-token - Token permission checking
 │   ├── /api/search-repos - Repository discovery with filtering
 │   ├── /api/fork-repo - Individual repository forking
 │   ├── /api/create-merged-repo - Merged repository creation
-│   └── /api/repo-content - Repository content preview
+│   ├── /api/repo-content - Repository content preview
+│   ├── /api/analyze-repos - Repository analytics
+│   ├── /api/compare-repos - Repository comparison
+│   ├── /api/health - Health check
+│   └── /api/metrics - Performance metrics
 └── Static File Serving
 ```
 
@@ -75,7 +79,8 @@ enhanced-app.js (EnhancedCaromarApp class)
 - New repository creation via GitHub API
 - Merge preview with folder structure visualization
 - Repository name availability checking
-- Detailed merge instructions with copy-to-clipboard
+- Detailed merge instructions with copy-to-clipboard, gated on
+  `isValidMergeRepository` passing for every selected repository
 - Support for private repository creation
 
 ### 💻 User Experience Enhancements
@@ -87,20 +92,29 @@ enhanced-app.js (EnhancedCaromarApp class)
 - Auto-save functionality with local storage
 
 ### 🧪 Comprehensive Testing
-- Unit tests for API endpoints
+- Unit tests for API endpoints (`tests/app.test.js`, `tests/server.test.js`)
+- Security module tests (`tests/security.test.js`, `tests/token-security.test.js`)
+- Merge-instruction contract tests (`tests/merge-contract.test.js`)
 - Frontend component testing framework
 - Mock services for reliable testing
 - Coverage reporting with Jest
 
 ## API Documentation
 
+**Note:** all authenticated requests use the `Authorization: Bearer <token>`
+header, never a `token` query parameter (query parameters can leak into
+server/proxy logs and browser history). See
+[docs/api/endpoints.md](../api/endpoints.md) for the authoritative,
+kept-in-sync API reference including `/api/analyze-repos`,
+`/api/compare-repos`, `/api/health`, and `/api/metrics`.
+
 ### Authentication Endpoints
 
 #### `GET /api/user`
 Returns comprehensive user information including rate limits.
 
-**Query Parameters:**
-- `token` (required): GitHub Personal Access Token
+**Headers:**
+- `Authorization: Bearer <token>` (required): GitHub Personal Access Token
 
 **Response:**
 ```json
@@ -120,8 +134,8 @@ Returns comprehensive user information including rate limits.
 #### `GET /api/validate-token`
 Validates token permissions and scopes.
 
-**Query Parameters:**
-- `token` (required): GitHub Personal Access Token
+**Headers:**
+- `Authorization: Bearer <token>` (required): GitHub Personal Access Token
 
 **Response:**
 ```json
@@ -138,11 +152,13 @@ Validates token permissions and scopes.
 #### `GET /api/search-repos`
 Advanced repository search with filtering and pagination.
 
+**Headers:**
+- `Authorization: Bearer <token>` (optional): GitHub Personal Access Token — increases GitHub API rate limits
+
 **Query Parameters:**
 - `username` (required): GitHub username or organization
-- `token` (required): GitHub Personal Access Token
 - `type`: Repository type filter (all, owner, member, public, private)
-- `sort`: Sort order (updated, created, pushed, name, stars, size)
+- `sort`: Sort order (updated, created, pushed, full_name)
 - `per_page`: Results per page (default: 100, max: 100)
 - `page`: Page number for pagination
 
@@ -165,7 +181,7 @@ Advanced repository search with filtering and pagination.
 #### `POST /api/fork-repo`
 Fork a repository with enhanced error handling.
 
-**Request Body:**
+**Request Body** (`Content-Type: application/json` required):
 ```json
 {
   "owner": "string",
@@ -178,7 +194,7 @@ Fork a repository with enhanced error handling.
 #### `POST /api/create-merged-repo`
 Create a new repository for merging multiple repositories.
 
-**Request Body:**
+**Request Body** (`Content-Type: application/json` required):
 ```json
 {
   "name": "string",
@@ -190,6 +206,10 @@ Create a new repository for merging multiple repositories.
 ```
 
 **Response notes:**
+- Each entry in `repositories` must pass `isValidMergeRepository`
+  (valid `name`, matching `owner/repo` `full_name`, and a bare
+  `https://github.com/<owner>/<repo>.git` `clone_url` with no
+  credentials/query/fragment) or the whole request is rejected.
 - A successful response means the destination repository was created, not that the merge is complete.
 - `merge_status` is returned as `pending_manual_steps` until you finish the provided local git steps.
 - If a local/manual merge is interrupted, remove any partially cloned repository folder before retrying that repository and continue with the remaining repositories.
@@ -220,7 +240,7 @@ Create a new repository for merging multiple repositories.
 ## Performance Optimizations
 
 ### Backend Optimizations
-- Express rate limiting to prevent API abuse
+- Express rate limiting to prevent API abuse (per-IP and per-token, see Security below)
 - Efficient GitHub API usage with proper headers
 - Error handling with specific HTTP status codes
 - Compression and caching headers for static assets
@@ -245,12 +265,23 @@ Create a new repository for merging multiple repositories.
 - No server-side token persistence
 - Secure token transmission via HTTPS
 - Permission validation before operations
+- When a token is used as a rate-limit identifier, only a truncated
+  SHA-256 hash of it is retained in memory (`simpleHash`), never the
+  raw value
 
 ### API Security
-- Rate limiting per IP address
-- Input validation and sanitization
-- CORS configuration for cross-origin requests
+- Two-layer rate limiting: per-IP (`express-rate-limit`, 100/15min) and
+  per-token-or-IP (`utils/security.js`'s `RateLimiter`, 60/min),
+  applied via the `tokenAwareRateLimit` middleware to every `/api/*` route
+- Input validation and sanitization (`utils/validation.js`)
+- Prototype-pollution guard (`sanitizeObject`) applied to every parsed
+  request body
+- Configurable CORS allowlist via `ALLOWED_ORIGINS` (`isAllowedOrigin`),
+  defaulting to allow-all for backward compatibility
+- `Content-Type: application/json` enforced on all state-changing POST routes
 - Error message sanitization to prevent information disclosure
+
+Full details: [SECURITY.md](../../SECURITY.md).
 
 ### Data Privacy
 - No personal data stored on server
@@ -261,24 +292,36 @@ Create a new repository for merging multiple repositories.
 ## Deployment Considerations
 
 ### Environment Variables
+
+See [docs/deployment/environment.md](../deployment/environment.md) for the full reference. Summary:
+
 ```bash
-PORT=3000                    # Server port
-GITHUB_CLIENT_ID=optional    # For OAuth (not implemented)
-GITHUB_CLIENT_SECRET=optional # For OAuth (not implemented)
-SESSION_SECRET=optional      # For sessions (not implemented)
+PORT=3000                     # Local dev server port (ignored on Netlify)
+NODE_ENV=development           # development | production | test
+LOG_LEVEL=INFO                 # DEBUG | INFO | WARN | ERROR
+ALLOWED_ORIGINS=                # Comma-separated CORS allowlist; unset = allow all
+
+# Reserved for future features — not read by server.js yet:
+GITHUB_CLIENT_ID=optional      # For OAuth (not implemented)
+GITHUB_CLIENT_SECRET=optional  # For OAuth (not implemented)
+SESSION_SECRET=optional        # For sessions (not implemented)
 ```
 
 ### Production Recommendations
 1. Use HTTPS for all connections
 2. Implement proper logging and monitoring
 3. Set up health check endpoints
-4. Configure production-grade rate limiting
-5. Add CSP headers for security
+4. Set `ALLOWED_ORIGINS` to your production frontend origin(s)
+5. Add CSP headers for security (already configured via Helmet)
 6. Implement proper error tracking
 
 ### Scaling Considerations
 - Stateless architecture allows horizontal scaling
-- Redis can be added for shared session storage
+- The current `RateLimiter` and per-token counters are in-process
+  memory — on Netlify Functions each invocation may get a fresh
+  instance, so rate limiting is best-effort per warm function
+  instance rather than globally exact. Redis or a similar shared
+  store would be needed for cluster-wide exact limits.
 - GitHub API rate limits are per-token, not per-server
 - CDN can be used for static asset delivery
 
@@ -316,6 +359,8 @@ SESSION_SECRET=optional      # For sessions (not implemented)
 - Progressive Web App (PWA) capabilities
 - Offline functionality with service workers
 - Advanced caching strategies
+- Shared/distributed rate-limit store (e.g. Redis) for exact
+  cluster-wide limits on serverless deployments
 
 ### User Experience
 - Drag-and-drop repository organization
@@ -331,9 +376,16 @@ SESSION_SECRET=optional      # For sessions (not implemented)
 - **Solution**: Application includes fallback emoji icons
 - **Prevention**: Icons-fallback.css provides universal support
 
-#### "Rate limit exceeded"
+#### "Rate limit exceeded" (GitHub API, HTTP 403)
 - **Solution**: Wait for rate limit reset or use authenticated requests
 - **Prevention**: Monitor rate limit display in application
+
+#### "Too many requests" (CAROMAR's own limiter, HTTP 429)
+- **Solution**: Wait roughly a minute (per-token limiter) or 15
+  minutes (per-IP limiter) and retry; check the `remaining` field in
+  the response body
+- **Cause**: `utils/security.js`'s `RateLimiter` or the IP-based
+  `express-rate-limit` middleware, not GitHub's own limits
 
 #### "Token validation failed"
 - **Solution**: Generate new token with proper scopes (repo, user)
@@ -344,7 +396,7 @@ SESSION_SECRET=optional      # For sessions (not implemented)
 - **Enhancement**: Future version will include automated git operations
 
 ### Debug Mode
-Enable debug logging by setting `localStorage.setItem('debug', 'true')` in browser console.
+Enable debug logging by setting `localStorage.setItem('debug', 'true')` in browser console (frontend) or `LOG_LEVEL=DEBUG` (backend).
 
 ## Contributing Guidelines
 
@@ -354,6 +406,9 @@ Enable debug logging by setting `localStorage.setItem('debug', 'true')` in brows
 - Add JSDoc comments for functions
 - Follow RESTful API conventions
 - Write tests for new features
+- If you add a new security control, wire it into `server.js` (or
+  another live code path) in the same change — see the contributor
+  checklist in [SECURITY.md](../../SECURITY.md)
 
 ### Pull Request Process
 1. Fork the repository

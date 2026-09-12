@@ -162,15 +162,24 @@ function isAllowedOrigin(origin, allowedOrigins = []) {
 }
 
 /**
- * Sanitize object to prevent prototype pollution
- * @param {Object} obj - Object to sanitize
- * @returns {Object} - Sanitized object
+ * Sanitize object to prevent prototype pollution.
+ * Recurses into plain objects (removing __proto__/constructor/prototype
+ * own-keys at every level) and into arrays (preserving array-ness and
+ * element order — a naive Object.entries()-based rebuild would otherwise
+ * collapse arrays into {"0": ..., "1": ...} plain objects, silently
+ * breaking any downstream Array.isArray() check on the sanitized value).
+ * @param {*} obj - Value to sanitize
+ * @returns {*} - Sanitized value, with arrays remaining arrays
  */
 function sanitizeObject(obj) {
     if (!obj || typeof obj !== 'object') {
         return obj;
     }
-    
+
+    if (Array.isArray(obj)) {
+        return obj.map(item => sanitizeObject(item));
+    }
+
     const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
     const sanitized = {};
     

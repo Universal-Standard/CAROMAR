@@ -1,6 +1,6 @@
 {
   "name": "caromar",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Copy A Repository Or Merge All Repositories - A web application for repository management",
   "main": "server.js",
   "engines": {
@@ -29,16 +29,16 @@
     "netlify",
     "serverless"
   ],
-  "author": "US-SPURS",
+  "author": "Universal-Standard",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/US-SPURS/CAROMAR.git"
+    "url": "https://github.com/Universal-Standard/CAROMAR.git"
   },
   "bugs": {
-    "url": "https://github.com/US-SPURS/CAROMAR/issues"
+    "url": "https://github.com/Universal-Standard/CAROMAR/issues"
   },
-  "homepage": "https://github.com/US-SPURS/CAROMAR#readme",
+  "homepage": "https://github.com/Universal-Standard/CAROMAR#readme",
   "dependencies": {
     "axios": "^1.13.5",
     "serverless-http": "^3.2.0",

@@ -85,6 +85,34 @@ function readFile(filePath) {
 }
 
 /**
+ * Recursively find files matching a predicate, skipping common
+ * dependency/build/version-control directories.
+ */
+function findFiles(dir, predicate, results = [], depth = 0) {
+    if (depth > 6) {
+        return results;
+    }
+    const skipDirs = new Set(['node_modules', '.git', 'coverage', 'dist', 'build', '.netlify']);
+    let entries;
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return results;
+    }
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            if (!skipDirs.has(entry.name)) {
+                findFiles(fullPath, predicate, results, depth + 1);
+            }
+        } else if (predicate(entry.name)) {
+            results.push(path.relative(process.cwd(), fullPath));
+        }
+    }
+    return results;
+}
+
+/**
  * Validation tests
  */
 
@@ -113,6 +141,12 @@ function validateRequiredFiles() {
             logError(`Missing required file: ${file}`);
         }
     });
+
+    if (fileExists('package-lock.json')) {
+        logSuccess('package-lock.json present (npm ci will be reproducible)');
+    } else {
+        logWarning('package-lock.json missing — npm ci requires a lockfile to be reproducible');
+    }
 }
 
 // 2. Validate package.json
@@ -147,6 +181,20 @@ function validatePackageJSON() {
         logSuccess(`Build script defined: ${pkg.scripts.build}`);
     } else {
         logWarning('No build script defined in package.json');
+    }
+
+    // Check repository metadata isn't pointing at a stale org/host
+    const metaUrls = [
+        pkg.repository && pkg.repository.url,
+        pkg.bugs && pkg.bugs.url,
+        pkg.homepage
+    ].filter(Boolean);
+    if (metaUrls.length > 0) {
+        if (metaUrls.every(url => url.includes('github.com/Universal-Standard/CAROMAR'))) {
+            logSuccess('package.json repository/bugs/homepage point at Universal-Standard/CAROMAR');
+        } else {
+            logWarning('package.json repository/bugs/homepage metadata may be stale — verify it matches the current repo location');
+        }
     }
 }
 
@@ -254,6 +302,18 @@ function validateServerJS() {
     } else {
         logWarning('Server may not use VIEWS_PATH correctly');
     }
+
+    // Guard against utils/security.js existing but not actually being
+    // required by server.js (the exact gap fixed in v1.2.0 — see
+    // CHANGELOG.md). This is a warning, not a hard failure, since a
+    // future refactor could legitimately move this wiring elsewhere.
+    if (fileExists('utils/security.js')) {
+        if (serverFile.includes("require('./utils/security')") || serverFile.includes('require("./utils/security")')) {
+            logSuccess('utils/security.js is imported by server.js');
+        } else {
+            logWarning('utils/security.js exists but does not appear to be imported by server.js — security protections it documents may not be active. See SECURITY.md.');
+        }
+    }
 }
 
 // 7. Check for sensitive data
@@ -287,7 +347,7 @@ function checkSensitiveData() {
 function validateUtilities() {
     logHeader('Validating Utility Modules');
     
-    const utils = ['logger', 'validation', 'analytics', 'comparison', 'performance'];
+    const utils = ['logger', 'validation', 'analytics', 'comparison', 'performance', 'security'];
     utils.forEach(util => {
         const filePath = `utils/${util}.js`;
         if (fileExists(filePath)) {
@@ -296,6 +356,25 @@ function validateUtilities() {
             logWarning(`Utility module missing: ${util}.js`);
         }
     });
+}
+
+// 9. Check for OS/editor junk artifacts that shouldn't be committed
+function checkForJunkArtifacts() {
+    logHeader('Checking for OS/Editor Artifacts');
+
+    const junkPatterns = [
+        name => name.toLowerCase() === 'desktop.ini',
+        name => name.toLowerCase() === 'thumbs.db',
+        name => name.endsWith('.DS_Store')
+    ];
+
+    const found = junkPatterns.flatMap(predicate => findFiles(process.cwd(), predicate));
+
+    if (found.length === 0) {
+        logSuccess('No desktop.ini/Thumbs.db/.DS_Store artifacts found in the repository');
+    } else {
+        found.forEach(file => logWarning(`Junk artifact committed: ${file} (add to .gitignore and remove it)`));
+    }
 }
 
 /**
@@ -314,6 +393,7 @@ function runValidations() {
     validateServerJS();
     checkSensitiveData();
     validateUtilities();
+    checkForJunkArtifacts();
     
     // Summary
     logHeader('Validation Summary');

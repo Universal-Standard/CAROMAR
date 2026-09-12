@@ -34,6 +34,13 @@ const {
     validateSort,
     validateMergeRepositoryDescriptors
 } = require('./utils/validation');
+const {
+    isAllowedOrigin,
+    sanitizeObject,
+    isAllowedContentType,
+    simpleHash,
+    RateLimiter
+} = require('./utils/security');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,12 +48,33 @@ const PORT = process.env.PORT || 3000;
 // Initialize performance monitor
 const performanceMonitor = new PerformanceMonitor();
 
-// Rate limiting
+// Initialize per-token/per-IP rate limiter (defense in depth alongside express-rate-limit)
+const tokenRateLimiter = new RateLimiter();
+
+// Rate limiting (IP-based, coarse-grained)
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // limit each IP to 100 requests per windowMs
     message: { error: 'Too many requests, please try again later.' }
 });
+
+/**
+ * Parse ALLOWED_ORIGINS env var (comma-separated) into an array.
+ * Defaults to an empty list, which combined with isAllowedOrigin's
+ * "no Origin header => allow" rule permits same-origin browser usage
+ * (the shipped frontend) while restricting cross-origin embedding
+ * unless explicitly configured.
+ * @returns {string[]} Configured allowed origins
+ */
+function getAllowedOrigins() {
+    const raw = process.env.ALLOWED_ORIGINS;
+    if (!raw) {
+        return [];
+    }
+    return raw.split(',').map(origin => origin.trim()).filter(Boolean);
+}
+
+const allowedOrigins = getAllowedOrigins();
 
 // Middleware
 // Security headers
@@ -63,9 +91,33 @@ app.use(helmet({
     }
 }));
 
-app.use(cors());
+// CORS: honor ALLOWED_ORIGINS when configured, otherwise reflect same-origin
+// requests only (no Origin header) and allow all others by default to
+// preserve backward compatibility for browser-only, token-in-header usage.
+// Configuring ALLOWED_ORIGINS in production is recommended (see
+// docs/deployment/environment.md).
+app.use(cors({
+    origin: (origin, callback) => {
+        if (allowedOrigins.length === 0 || isAllowedOrigin(origin, allowedOrigins)) {
+            return callback(null, true);
+        }
+        logger.warn('Blocked request from disallowed origin', { origin });
+        return callback(null, false);
+    }
+}));
+
 app.use(express.json({ limit: '10mb' })); // Limit request body size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Prototype-pollution guard: strip dangerous keys (__proto__, constructor,
+// prototype) from parsed JSON/urlencoded bodies before any handler sees them.
+app.use((req, res, next) => {
+    if (req.body && typeof req.body === 'object') {
+        req.body = sanitizeObject(req.body);
+    }
+    next();
+});
+
 app.use(express.static('public'));
 
 // Request logging and performance tracking middleware
@@ -83,6 +135,42 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/', apiLimiter);
+
+/**
+ * Per-token/per-IP rate limiting middleware for state-changing API routes.
+ * Applied in addition to the coarse IP-based apiLimiter above. Identifies
+ * callers by a SHA-256 hash of their bearer token when present (never the
+ * raw token, so nothing sensitive is retained in memory), falling back to
+ * IP address for unauthenticated requests.
+ */
+function tokenAwareRateLimit(req, res, next) {
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const bodyToken = typeof req.body?.token === 'string' ? req.body.token : null;
+    const identifierSource = bearerToken || bodyToken;
+    const identifier = identifierSource ? `token:${simpleHash(identifierSource)}` : `ip:${req.ip}`;
+
+    if (!tokenRateLimiter.checkLimit(identifier)) {
+        logger.warn('Per-token rate limit exceeded', { identifier });
+        return res.status(429).json({
+            error: 'Too many requests for this token, please slow down.',
+            remaining: tokenRateLimiter.getRemaining(identifier)
+        });
+    }
+
+    next();
+}
+
+/**
+ * Enforces that POST/PUT bodies are application/json, rejecting anything
+ * else before it reaches route handlers.
+ */
+function requireJsonContentType(req, res, next) {
+    if (!isAllowedContentType(req.headers['content-type'])) {
+        return res.status(415).json({ error: 'Content-Type must be application/json' });
+    }
+    next();
+}
 
 // Set view engine - use VIEWS_PATH for Netlify serverless compatibility
 app.set('view engine', 'ejs');
@@ -126,7 +214,7 @@ app.get('/', (req, res) => {
  * @param {number} [req.query.page=1] - Page number
  * @returns {Object} Repository list with pagination info
  */
-app.get('/api/search-repos', async (req, res) => {
+app.get('/api/search-repos', tokenAwareRateLimit, async (req, res) => {
     try {
         let { username, type = 'all', sort = 'updated', per_page = 100, page = 1 } = req.query;
         
@@ -262,7 +350,7 @@ app.get('/api/search-repos', async (req, res) => {
  * @param {string} [req.body.organization] - Optional organization to fork to
  * @returns {Object} Forked repository information
  */
-app.post('/api/fork-repo', async (req, res) => {
+app.post('/api/fork-repo', requireJsonContentType, tokenAwareRateLimit, async (req, res) => {
     try {
         let { owner, repo, token, organization } = req.body;
         
@@ -336,11 +424,10 @@ app.post('/api/fork-repo', async (req, res) => {
 });
 
 // New API endpoint to create a merged repository
-app.post('/api/create-merged-repo', async (req, res) => {
+app.post('/api/create-merged-repo', requireJsonContentType, tokenAwareRateLimit, async (req, res) => {
     let targetRepositoryFullName = null;
     let createdRepositoryFullName = null;
     let headers = null;
-
     try {
         let {
             name,
@@ -557,7 +644,7 @@ app.post('/api/create-merged-repo', async (req, res) => {
 });
 
 // API endpoint to get repository content for preview
-app.get('/api/repo-content', async (req, res) => {
+app.get('/api/repo-content', tokenAwareRateLimit, async (req, res) => {
     try {
         let { owner, repo, path = '' } = req.query;
         
@@ -607,7 +694,7 @@ app.get('/api/repo-content', async (req, res) => {
 });
 
 // Enhanced API endpoint to get user info with additional details
-app.get('/api/user', async (req, res) => {
+app.get('/api/user', tokenAwareRateLimit, async (req, res) => {
     try {
         // Extract token from Authorization header
         const authHeader = req.headers.authorization;
@@ -659,7 +746,7 @@ app.get('/api/user', async (req, res) => {
 });
 
 // API endpoint to validate token permissions
-app.get('/api/validate-token', async (req, res) => {
+app.get('/api/validate-token', tokenAwareRateLimit, async (req, res) => {
     try {
         // Extract token from Authorization header
         const authHeader = req.headers.authorization;
@@ -700,7 +787,7 @@ app.get('/api/validate-token', async (req, res) => {
 });
 
 // API endpoint to analyze repositories
-app.post('/api/analyze-repos', async (req, res) => {
+app.post('/api/analyze-repos', requireJsonContentType, tokenAwareRateLimit, async (req, res) => {
     try {
         const { repositories } = req.body;
         
@@ -728,7 +815,7 @@ app.post('/api/analyze-repos', async (req, res) => {
 });
 
 // API endpoint to compare repositories
-app.post('/api/compare-repos', async (req, res) => {
+app.post('/api/compare-repos', requireJsonContentType, tokenAwareRateLimit, async (req, res) => {
     try {
         const { repositories, mode = 'two' } = req.body;
         

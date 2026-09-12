@@ -1,32 +1,52 @@
-name: Node.js CI
+name: CI
 
 on:
   push:
-    branches: [ 'main' ]
+    branches: [main]
   pull_request:
-    branches: [ 'main' ]
+    branches: [main]
+  workflow_dispatch:
 
+# Least-privilege by default: this workflow only reads code and reports
+# check results, it never needs to write to the repository, packages,
+# issues, or pages.
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint-and-test:
+  lint-test-validate:
+    name: Lint, Test & Validate Deployment Config
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run lint
+      - name: Lint
         run: npm run lint
 
-      - name: Run tests
-        run: npm test
+      - name: Test
+        run: npm test -- --ci
+
+      - name: Validate Netlify deployment configuration
+        run: npm run validate
+
+      - name: Audit dependencies (non-blocking)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Confirm build command succeeds
+        run: npm run build
