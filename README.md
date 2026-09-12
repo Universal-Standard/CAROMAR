@@ -45,10 +45,14 @@ Deploy CAROMAR to Netlify with one click:
 - Error handling for failed forks
 
 #### 2. Merge into Single Repository
-- Creates a new destination repository and provides validated, credential-free
-  local git commands to add each selected repo as its own folder
-- Each source repository becomes a main folder
+- Combines multiple repositories into one organized repository
+- Supports either creating a new target repository or merging into an existing owned repository
+- Merge strategy options:
+  - **Subfolders**: each source repository becomes a main folder
+  - **Cohesive**: merges at target root with automatic conflict fallback folders
 - Maintains separation while creating unified access
+- Automated server-side merge execution with per-file skip/abort reporting for follow-up
+- Repository descriptor validation (name/full_name/clone_url + duplicate detection) before merge
 - Custom naming for the merged repository
 
 ### 📊 Progress Tracking
@@ -171,8 +175,11 @@ Choose between two operation modes:
 
 **Merge into Single Repository:**
 - Select multiple repositories to combine
-- Enter a name for the merged repository
-- Creates the destination repository and provides local/manual merge steps for adding each selected repo as a folder
+- Choose whether to create a new repository or target an existing repository you can push to
+- Choose a merge strategy (subfolders or cohesive)
+- Provide the target repository name/details and execute merge
+- For a new target, enter a name for the merged repository
+- Executes the server-side merge and reports any skipped files or early aborts
 
 ### Step 4: Execute Action
 1. Select your desired repositories using checkboxes
@@ -183,7 +190,7 @@ Choose between two operation modes:
 ### Step 5: Review Results
 - View detailed results of the operation
 - Access direct links to newly created repositories
-- For merge operations, complete the provided local/manual git steps before treating the merge as finished
+- For merge operations, review `automated_merge` details and follow up on skipped files or abort reasons before treating the merge as complete
 - Review any errors or issues encountered
 
 ---

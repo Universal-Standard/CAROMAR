@@ -137,10 +137,28 @@
             <div id="merge-options" style="display: none;">
                 <div class="merge-config">
                     <div class="input-group">
+                        <fieldset>
+                            <legend>Merge Target:</legend>
+                            <div class="radio-group">
+                                <label>
+                                    <input type="radio" id="merge-target-new" name="merge-target" value="new" checked>
+                                    Create new repository
+                                </label>
+                                <label>
+                                    <input type="radio" id="merge-target-existing" name="merge-target" value="existing">
+                                    Merge into existing repository
+                                </label>
+                            </div>
+                        </fieldset>
+                    </div>
+                    <div class="input-group">
                         <input type="text" id="merged-repo-name" placeholder="Enter name for merged repository" required />
-                        <button id="check-repo-name" class="btn btn-small">
+                        <button id="check-repo-name" class="btn btn-small" type="button">
                             <i class="fas fa-check"></i> Check Availability
                         </button>
+                    </div>
+                    <div class="input-group" id="existing-repo-group" style="display: none;">
+                        <input type="text" id="existing-repo-full-name" placeholder="Enter target repository as owner/repo" aria-label="Target repository (owner/repo)" disabled />
                     </div>
                     <div class="input-group">
                         <textarea id="merged-repo-description" placeholder="Enter description for merged repository (optional)" rows="2"></textarea>
@@ -150,6 +168,13 @@
                             <input type="checkbox" id="merged-repo-private">
                             <i class="fas fa-lock"></i> Make repository private
                         </label>
+                    </div>
+                    <div class="input-group">
+                        <label for="merge-strategy">Merge strategy:</label>
+                        <select id="merge-strategy">
+                            <option value="subfolders">Keep each repository in its own subfolder</option>
+                            <option value="cohesive">Cohesive merge at target root (conflicts preserved in fallback folders)</option>
+                        </select>
                     </div>
                     <div class="merge-preview" id="merge-preview" style="display: none;">
                         <h4>Merge Preview:</h4>

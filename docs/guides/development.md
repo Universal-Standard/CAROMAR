@@ -192,12 +192,15 @@ Fork a repository with enhanced error handling.
 ```
 
 #### `POST /api/create-merged-repo`
-Create a new repository for merging multiple repositories.
+Create a new repository or merge into an existing writable repository.
 
 **Request Body** (`Content-Type: application/json` required):
 ```json
 {
-  "name": "string",
+  "target": "new | existing",
+  "name": "string (required when target = new)",
+  "target_repository": "owner/repo (required when target = existing)",
+  "merge_strategy": "subfolders | cohesive",
   "description": "string",
   "repositories": "array of repository objects",
   "token": "string",
@@ -206,13 +209,9 @@ Create a new repository for merging multiple repositories.
 ```
 
 **Response notes:**
-- Each entry in `repositories` must pass `isValidMergeRepository`
-  (valid `name`, matching `owner/repo` `full_name`, and a bare
-  `https://github.com/<owner>/<repo>.git` `clone_url` with no
-  credentials/query/fragment) or the whole request is rejected.
-- A successful response means the destination repository was created, not that the merge is complete.
-- `merge_status` is returned as `pending_manual_steps` until you finish the provided local git steps.
-- If a local/manual merge is interrupted, remove any partially cloned repository folder before retrying that repository and continue with the remaining repositories.
+- Each entry in `repositories` must pass descriptor validation (valid `name`, matching `owner/repo` `full_name`, and GitHub HTTPS `clone_url` with no credentials/query/fragment) or the whole request is rejected.
+- Successful responses return `automated_merge` with `mergedFiles`, `skippedFiles`, `aborted`, `abortReason`, and per-repository results.
+- Treat responses with `automated_merge.aborted === true` or non-empty `automated_merge.skippedFiles` as incomplete and requiring follow-up.
 
 ## Frontend JavaScript API
 
@@ -392,8 +391,8 @@ SESSION_SECRET=optional        # For sessions (not implemented)
 - **Prevention**: Use token validation endpoint to check permissions
 
 #### "Repository merge not working"
-- **Solution**: Follow provided merge instructions manually
-- **Enhancement**: Future version will include automated git operations
+- **Solution**: Inspect `automated_merge.skippedFiles` and `automated_merge.abortReason`, then retry with reduced scope or complete follow-up actions for skipped files
+- **Context**: Merges execute server-side and can still be partial when files are unsupported, oversized, or blocked by API errors
 
 ### Debug Mode
 Enable debug logging by setting `localStorage.setItem('debug', 'true')` in browser console (frontend) or `LOG_LEVEL=DEBUG` (backend).

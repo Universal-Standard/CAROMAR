@@ -46,7 +46,7 @@ Get the current status of the API server.
 ### Performance Metrics
 Get aggregated request performance metrics (uptime monitoring / debugging).
 
-**Endpoint:** `GET /metrics`
+**Endpoint:** `GET /api/metrics`
 
 **Response:**
 ```json
@@ -180,9 +180,9 @@ Fork a single repository to your account.
 ```
 
 ### Create Merged Repository
-Create a new repository that will contain multiple repositories as subdirectories.
+Create a new target repository or merge directly into an existing one. Use `subfolders` to keep each source repository under its own folder, or `cohesive` to merge at the target root and fall back to source-repository folders on path conflicts.
 
-**Endpoint:** `POST /create-merged-repo`
+**Endpoint:** `POST /api/create-merged-repo`
 
 Each entry in `repositories` is validated (`isValidMergeRepository`): it
 must include a `name`, an `owner/repo`-shaped `full_name` matching that
@@ -193,7 +193,9 @@ entries cause the whole request to be rejected with `400`.
 **Request Body:**
 ```json
 {
+  "target": "new",
   "name": "merged-repo",
+  "merge_strategy": "subfolders",
   "description": "Merged repository containing multiple projects",
   "token": "ghp_...",
   "private": false,
@@ -212,6 +214,22 @@ entries cause the whole request to be rejected with `400`.
 }
 ```
 
+`target` options:
+- `"new"` (default): create a new repository using `name`
+- `"existing"`: merge into an existing repository you can push to, using `target_repository`
+
+`merge_strategy` options:
+- `"subfolders"` (default): each source repo merges under `<repo-name>/...`
+- `"cohesive"`: merge at target root; path conflicts fall back to `<repo-name>/...`
+
+**Validation Rules (repositories[]):**
+- `name` must be a valid GitHub repository name (`[A-Za-z0-9._-]`, max 100 chars)
+- `full_name` must match `owner/repository`
+- `clone_url` must be an HTTPS GitHub URL (`https://github.com/<owner>/<repo>[.git]`)
+- `name` and `full_name` must be unique within the request
+
+Invalid descriptors return `400` with an indexed error message (example: `Repository at index 0 has an invalid clone_url`).
+
 **Response:**
 ```json
 {
@@ -220,18 +238,41 @@ entries cause the whole request to be rejected with `400`.
     "name": "merged-repo",
     "full_name": "your-username/merged-repo",
     "html_url": "https://github.com/your-username/merged-repo",
-    "clone_url": "https://github.com/your-username/merged-repo.git"
+    "clone_url": "https://github.com/your-username/merged-repo.git",
+    "ssh_url": "git@github.com:your-username/merged-repo.git"
   },
-  "message": "Repository created successfully. Manual merge steps are still required.",
-  "merge_status": "pending_manual_steps",
-  "merge_instructions": {
-    "repositories": [...],
-    "note": "These commands are for manual execution. The merge is not complete until you run every step locally and commit the combined result.",
-    "interruption_note": "If you stop partway through, remove any partially cloned repository folder before retrying that repository, then continue with the remaining repositories.",
-    "steps": ["git clone ...", "cd ...", ...]
+  "target": "new",
+  "merge_strategy": "subfolders",
+  "message": "Repository created and merged automatically",
+  "automated_merge": {
+    "mergedFiles": 42,
+    "sourceRepositories": 2,
+    "skippedFiles": [],
+    "aborted": false,
+    "abortReason": null,
+    "repositoryResults": [
+      {
+        "full_name": "owner/repo1",
+        "folder": "repo1",
+        "mergedFiles": 12,
+        "skippedFiles": [],
+        "capabilities": ["frontend", "testing"],
+        "riskScore": 0.1
+      }
+    ],
+    "aiInsights": [
+      {
+        "repository": "owner/repo1",
+        "recommendation": "Repository merged cleanly. No additional remediation required.",
+        "confidence": 0.98,
+        "riskScore": 0.1
+      }
+    ]
   }
 }
 ```
+
+Clients must inspect `message` and `automated_merge.aborted`/`automated_merge.skippedFiles` before treating a `200` response with `success: true` as a completed automatic merge. Partial and aborted automatic merges still return `200` and require follow-up based on those fields.
 
 ### Get Repository Content
 Get the contents of a specific file or directory in a repository.
@@ -302,7 +343,7 @@ Perform analytics on a collection of repositories.
 ### Compare Repositories
 Compare two or more repositories.
 
-**Endpoint:** `POST /compare-repos`
+**Endpoint:** `POST /api/compare-repos`
 
 **Request Body:**
 ```json

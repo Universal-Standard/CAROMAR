@@ -113,6 +113,21 @@ class EnhancedCaromarApp {
             this.updateMergePreview();
         });
 
+        document.querySelectorAll('input[name="merge-target"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                this.handleMergeTargetModeChange();
+                this.updateMergePreview();
+            });
+        });
+
+        document.getElementById('existing-repo-full-name').addEventListener('input', () => {
+            this.updateMergePreview();
+        });
+
+        document.getElementById('merge-strategy').addEventListener('change', () => {
+            this.updateMergePreview();
+        });
+
         // Execute action
         document.getElementById('execute-action').addEventListener('click', () => {
             this.executeAction();
@@ -326,20 +341,6 @@ class EnhancedCaromarApp {
     }
 
     /**
-     * Escape text for safe HTML rendering.
-     * @param {string} value - Text to escape
-     * @returns {string} Escaped text
-     */
-    escapeHtml(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    /**
      * Allow only safe HTTPS URLs for external links.
      * @param {string} value - URL to validate
      * @returns {string} Safe URL string or '#'
@@ -460,6 +461,45 @@ class EnhancedCaromarApp {
         }
     }
 
+    escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    sanitizeLink(url) {
+        return this.getSafeExternalUrl(url);
+    }
+
+    isValidGitHubUsername(username) {
+        return /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/.test(username || '');
+    }
+
+    isValidRepositoryName(name) {
+        if (!/^[a-zA-Z0-9._-]{1,100}$/.test(name || '')) {
+            return false;
+        }
+
+        return name !== '.' && name !== '..';
+    }
+
+    isValidRepositoryFullName(fullName) {
+        if (!fullName || typeof fullName !== 'string') {
+            return false;
+        }
+
+        const fullNameParts = fullName.split('/');
+        if (fullNameParts.length !== 2) {
+            return false;
+        }
+
+        const [owner, name] = fullNameParts;
+        return Boolean(owner && name && this.isValidGitHubUsername(owner) && this.isValidRepositoryName(name));
+    }
+
     hideSkeletonLoader() {
         const skeletons = document.querySelectorAll('.repo-skeleton');
         skeletons.forEach(skeleton => skeleton.remove());
@@ -510,6 +550,10 @@ class EnhancedCaromarApp {
         const div = document.createElement('div');
         div.className = `repo-item ${repo.private ? 'private' : ''} ${repo.archived ? 'archived' : ''}`;
         div.dataset.repoId = repo.id;
+        const safeName = this.escapeHtml(repo.name);
+        const safeDescription = this.escapeHtml(repo.description || 'No description available');
+        const safeLanguage = this.escapeHtml(repo.language || '');
+        const safeLicense = repo.license?.name ? this.escapeHtml(repo.license.name) : '';
 
         const languageDot = repo.language ? 
             `<div class="language-dot" style="background-color: ${this.getLanguageColor(repo.language)}"></div>` : 
@@ -517,7 +561,7 @@ class EnhancedCaromarApp {
 
         const topics = repo.topics && repo.topics.length > 0 ? 
             `<div class="repo-topics">
-                ${repo.topics.slice(0, 3).map(topic => `<span class="topic-tag">${topic}</span>`).join('')}
+                ${repo.topics.slice(0, 3).map(topic => `<span class="topic-tag">${this.escapeHtml(topic)}</span>`).join('')}
                 ${repo.topics.length > 3 ? `<span class="topic-tag">+${repo.topics.length - 3}</span>` : ''}
             </div>` : '';
 
@@ -529,20 +573,20 @@ class EnhancedCaromarApp {
         div.innerHTML = `
             <div class="repo-header">
                 <h3 class="repo-name">
-                    ${repo.name}
+                    ${safeName}
                     ${repo.private ? '<i class="fas fa-lock" title="Private"></i>' : ''}
                     ${repo.fork ? '<i class="fas fa-code-branch" title="Fork"></i>' : ''}
                     ${repo.archived ? '<i class="fas fa-archive" title="Archived"></i>' : ''}
                 </h3>
                 <input type="checkbox" class="repo-checkbox" data-repo-id="${repo.id}">
             </div>
-            <p class="repo-description">${repo.description || 'No description available'}</p>
+            <p class="repo-description">${safeDescription}</p>
             ${topics}
             <div class="repo-meta">
                 ${repo.language ? `
                     <span class="repo-language">
                         ${languageDot}
-                        ${repo.language}
+                        ${safeLanguage}
                     </span>
                 ` : ''}
                 <span class="repo-stats">
@@ -554,7 +598,7 @@ class EnhancedCaromarApp {
             </div>
             <div class="repo-stats">
                 <span><i class="fas fa-clock"></i> Updated ${this.formatDate(repo.updated_at)}</span>
-                ${repo.license ? `<span><i class="fas fa-balance-scale"></i> ${repo.license.name}</span>` : ''}
+                ${repo.license ? `<span><i class="fas fa-balance-scale"></i> ${safeLicense}</span>` : ''}
             </div>
         `;
 
@@ -811,7 +855,36 @@ class EnhancedCaromarApp {
 
         this.updateActionButton();
         if (mergeMode) {
+            this.handleMergeTargetModeChange();
             this.updateMergePreview();
+        }
+    }
+
+    handleMergeTargetModeChange() {
+        const targetMode = document.querySelector('input[name="merge-target"]:checked')?.value || 'new';
+        const existingRepoGroup = document.getElementById('existing-repo-group');
+        const existingRepoInput = document.getElementById('existing-repo-full-name');
+        const checkRepoButton = document.getElementById('check-repo-name');
+        const mergedRepoName = document.getElementById('merged-repo-name');
+        const mergedRepoDescription = document.getElementById('merged-repo-description');
+        const privateOption = document.getElementById('merged-repo-private');
+
+        if (targetMode === 'existing') {
+            existingRepoGroup.style.display = 'block';
+            existingRepoGroup.setAttribute('aria-hidden', 'false');
+            existingRepoInput.disabled = false;
+            checkRepoButton.style.display = 'none';
+            mergedRepoName.disabled = true;
+            mergedRepoDescription.disabled = true;
+            privateOption.disabled = true;
+        } else {
+            existingRepoGroup.style.display = 'none';
+            existingRepoGroup.setAttribute('aria-hidden', 'true');
+            existingRepoInput.disabled = true;
+            checkRepoButton.style.display = 'inline-flex';
+            mergedRepoName.disabled = false;
+            mergedRepoDescription.disabled = false;
+            privateOption.disabled = false;
         }
     }
 
@@ -821,23 +894,42 @@ class EnhancedCaromarApp {
         const selectedRepos = this.repositories.filter(repo => 
             this.selectedRepos.has(repo.id.toString())
         );
+        const targetMode = document.querySelector('input[name="merge-target"]:checked')?.value || 'new';
+        const mergeStrategy = document.getElementById('merge-strategy').value;
+        const newRepoName = this.escapeHtml(document.getElementById('merged-repo-name').value || 'merged-repository');
+        const existingRepoName = this.escapeHtml(document.getElementById('existing-repo-full-name').value || 'owner/repo');
+        const targetRoot = targetMode === 'existing' ? existingRepoName : newRepoName;
 
         if (selectedRepos.length > 0) {
             mergePreview.style.display = 'block';
-            const repoName = document.getElementById('merged-repo-name').value || 'merged-repository';
-            
+            const strategyHint = mergeStrategy === 'cohesive'
+                ? '<p>Files merge into target root. Path conflicts fall back to source-repository folders.</p>'
+                : '';
+            const previewItems = mergeStrategy === 'cohesive'
+                ? selectedRepos.map(repo => `
+                    <div class="repo-folder">
+                        <div class="folder-icon">🔗 ${this.escapeHtml(repo.name)} contributes to root</div>
+                        <div class="folder-content">
+                            ${repo.language ? `• ${this.escapeHtml(repo.language)} files` : ''}
+                            • conflicts fallback to ${this.escapeHtml(repo.name)}/
+                        </div>
+                    </div>
+                `).join('')
+                : selectedRepos.map(repo => `
+                    <div class="repo-folder">
+                        <div class="folder-icon">📁 ${this.escapeHtml(repo.name)}/</div>
+                        <div class="folder-content">
+                            ${repo.language ? `• ${this.escapeHtml(repo.language)} files` : ''}
+                            ${repo.description ? `• ${this.escapeHtml(repo.description.substring(0, 50))}...` : ''}
+                        </div>
+                    </div>
+                `).join('');
+
             mergeStructure.innerHTML = `
                 <div class="merge-tree">
-                    <div class="folder-icon">📁 ${repoName}/</div>
-                    ${selectedRepos.map(repo => `
-                        <div class="repo-folder">
-                            <div class="folder-icon">📁 ${repo.name}/</div>
-                            <div class="folder-content">
-                                ${repo.language ? `• ${repo.language} files` : ''}
-                                ${repo.description ? `• ${repo.description.substring(0, 50)}...` : ''}
-                            </div>
-                        </div>
-                    `).join('')}
+                    <div class="folder-icon">📁 ${targetRoot}/</div>
+                    ${strategyHint}
+                    ${previewItems}
                 </div>
             `;
         } else {
@@ -846,6 +938,12 @@ class EnhancedCaromarApp {
     }
 
     async checkRepositoryNameAvailability() {
+        const targetMode = document.querySelector('input[name="merge-target"]:checked')?.value || 'new';
+        if (targetMode !== 'new') {
+            this.showWarning('Name availability only applies when creating a new repository');
+            return;
+        }
+
         const repoName = document.getElementById('merged-repo-name').value.trim();
         const checkBtn = document.getElementById('check-repo-name');
 
@@ -969,17 +1067,25 @@ class EnhancedCaromarApp {
     }
 
     async mergeRepositories(repos) {
+        const targetMode = document.querySelector('input[name="merge-target"]:checked')?.value || 'new';
         const mergedRepoName = document.getElementById('merged-repo-name').value.trim();
+        const existingRepoFullName = document.getElementById('existing-repo-full-name').value.trim();
         const mergedRepoDescription = document.getElementById('merged-repo-description').value.trim();
         const isPrivate = document.getElementById('merged-repo-private').checked;
+        const mergeStrategy = document.getElementById('merge-strategy').value;
         
-        if (!mergedRepoName) {
+        if (targetMode === 'new' && !mergedRepoName) {
             this.showError('Please enter a name for the merged repository');
             return;
         }
 
+        if (targetMode === 'existing' && !this.isValidRepositoryFullName(existingRepoFullName)) {
+            this.showError('Please enter a valid target repository in owner/repo format');
+            return;
+        }
+
         this.showProgressSection();
-        this.updateProgress(10, 'Creating merged repository...');
+        this.updateProgress(10, targetMode === 'new' ? 'Creating merged repository...' : 'Preparing existing repository merge...');
 
         try {
             const response = await fetch('/api/create-merged-repo', {
@@ -989,7 +1095,10 @@ class EnhancedCaromarApp {
                 },
                 body: JSON.stringify({
                     name: mergedRepoName,
-                    description: mergedRepoDescription,
+                    target: targetMode,
+                    target_repository: targetMode === 'existing' ? existingRepoFullName : undefined,
+                    merge_strategy: mergeStrategy,
+                    description: targetMode === 'new' ? mergedRepoDescription : undefined,
                     repositories: repos.map(repo => ({
                         name: repo.name,
                         full_name: repo.full_name,
@@ -1004,13 +1113,13 @@ class EnhancedCaromarApp {
             const result = await response.json();
             
             if (response.ok) {
-                this.updateProgress(100, 'Repository created. Complete the manual merge steps locally.');
+                this.updateProgress(100, result.message || 'Merge completed successfully!');
                 this.showMergeInstructions(result);
             } else {
-                throw new Error(result.error || 'Failed to create merged repository');
+                throw new Error(result.error || 'Failed to merge repositories');
             }
         } catch (error) {
-            this.updateProgress(0, 'Failed to create merged repository');
+            this.updateProgress(0, 'Failed to merge repositories');
             this.showError(`Merge failed: ${error.message}`);
         }
     }
@@ -1018,67 +1127,122 @@ class EnhancedCaromarApp {
     showMergeInstructions(result) {
         const resultsSection = document.getElementById('results-section');
         const resultsContent = document.getElementById('results-content');
-        const mergeSteps = result.merge_instructions.steps.join('\n');
-        const escapedName = this.escapeHtml(result.repository.name);
-        const safeRepositoryUrl = this.getSafeExternalUrl(result.repository.html_url);
-        const escapedRepositoryUrl = this.escapeHtml(safeRepositoryUrl);
-        const escapedMessage = this.escapeHtml(result.message);
-        const escapedNote = this.escapeHtml(result.merge_instructions.note);
-        const escapedInterruptionNote = this.escapeHtml(result.merge_instructions.interruption_note);
-        
-        resultsContent.innerHTML = `
-            <div class="merge-success">
-                <div class="summary-card">
-                    <h3>✅ Repository Created — Merge Still Pending</h3>
-                    <p><strong>Name:</strong> ${escapedName}</p>
-                    <p><strong>URL:</strong> <a href="${escapedRepositoryUrl}" target="_blank" rel="noopener noreferrer">${escapedRepositoryUrl}</a></p>
-                    <p>${escapedMessage}</p>
+        const automatedMerge = result.automated_merge;
+        const fallbackInstructions = result.merge_instructions;
+        const fallbackCommands = fallbackInstructions ? fallbackInstructions.steps.join('\n') : '';
+        const safeRepoName = this.escapeHtml(result.repository?.name || '');
+        const safeRepoUrl = this.sanitizeLink(result.repository?.html_url || '');
+        const safeRepoUrlLabel = this.escapeHtml(result.repository?.html_url || '');
+        const escapedMessage = this.escapeHtml(result.message || '');
+        const hasSkippedFiles = Boolean(automatedMerge?.skippedFiles?.length);
+        const isAborted = Boolean(automatedMerge?.aborted);
+        const isPartialResult = Boolean(automatedMerge && (isAborted || hasSkippedFiles));
+        let heading = '✅ Merge Completed Successfully';
+        let statusBadge = '<span class="status-badge success">Automatic merge complete</span>';
+        let detailsHtml = '';
+
+        if (automatedMerge) {
+            if (isAborted) {
+                heading = '⚠️ Merge Stopped Early';
+                statusBadge = '<span class="status-badge warning">Merge stopped early</span>';
+            } else if (hasSkippedFiles) {
+                heading = '⚠️ Merge Completed with Warnings';
+                statusBadge = '<span class="status-badge warning">Merge completed with warnings</span>';
+            }
+
+            detailsHtml = `
+                <div class="merge-instructions">
+                    <h4>🤖 Automated Merge Summary</h4>
+                    <p><strong>Total merged files:</strong> ${automatedMerge.mergedFiles}</p>
+                    <p><strong>Source repositories:</strong> ${automatedMerge.sourceRepositories}</p>
+                    <p><strong>Skipped items:</strong> ${automatedMerge.skippedFiles.length}</p>
+                    ${hasSkippedFiles ? `
+                        <ul class="merge-skipped-items">
+                            ${automatedMerge.skippedFiles.map(reason => `<li>${this.escapeHtml(reason)}</li>`).join('')}
+                        </ul>
+                    ` : ''}
+                    ${isAborted ? `<p><strong>Merge stopped early:</strong> ${this.escapeHtml(automatedMerge.abortReason)}</p>` : ''}
                 </div>
-                
+                <div class="merge-repos">
+                    <h4>📦 Repository Results</h4>
+                    ${(automatedMerge.repositoryResults || []).map(repo => `
+                        <div class="repo-merge-item">
+                            <strong>${this.escapeHtml(repo.full_name)}</strong>
+                            <p>Merged files: ${repo.mergedFiles} • Risk score: ${repo.riskScore}</p>
+                            <p>Capabilities: ${(repo.capabilities || []).map(capability => this.escapeHtml(capability)).join(', ') || 'none detected'}</p>
+                            <p>Skipped: ${(repo.skippedFiles || []).length}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else if (fallbackInstructions) {
+            const escapedNote = this.escapeHtml(fallbackInstructions.note || '');
+            const escapedInterruptionNote = this.escapeHtml(fallbackInstructions.interruption_note || '');
+
+            heading = '✅ Repository Created — Merge Still Pending';
+            statusBadge = '<span class="status-badge warning">Manual steps required</span>';
+            detailsHtml = `
                 <div class="merge-instructions">
                     <h4>📋 Manual Merge Instructions</h4>
                     <p>${escapedNote}</p>
                     <p>${escapedInterruptionNote}</p>
                     <div class="code-block">
-                        <pre><code class="merge-command-list"></code></pre>
-                        <button class="copy-btn" type="button">
+                        <pre><code id="merge-commands-code"></code></pre>
+                        <button class="copy-btn" id="copy-merge-commands-btn" type="button">
                             📋 Copy Commands
                         </button>
                     </div>
                 </div>
-                
                 <div class="merge-repos">
                     <h4>📦 Repositories to Merge</h4>
                     <ul class="merge-repo-list">
-                        ${result.merge_instructions.repositories.map(repo => `
-                        <li class="repo-merge-item">
-                            <strong>${this.escapeHtml(repo.name)}</strong>
-                            <p>${this.escapeHtml(repo.description || 'No description')}</p>
-                            <a href="${this.escapeHtml(this.getSafeExternalUrl(repo.clone_url))}" target="_blank" rel="noopener noreferrer" class="clone-link">Clone URL</a>
-                        </li>
-                    `).join('')}
+                        ${fallbackInstructions.repositories.map(repo => `
+                            <li class="repo-merge-item">
+                                <strong>${this.escapeHtml(repo.name)}</strong>
+                                <p>${this.escapeHtml(repo.description || 'No description')}</p>
+                                <a href="${this.sanitizeLink(repo.clone_url)}" target="_blank" rel="noopener noreferrer" class="clone-link">Clone URL</a>
+                            </li>
+                        `).join('')}
                     </ul>
                 </div>
+            `;
+        } else if (result.message) {
+            statusBadge = `<span class="status-badge ${isPartialResult ? 'warning' : 'success'}">${isPartialResult ? 'Review merge details' : 'Completed'}</span>`;
+        }
+
+        resultsContent.innerHTML = `
+            <div class="merge-success">
+                <div class="summary-card">
+                    <h3>${heading}</h3>
+                    <p>${statusBadge}</p>
+                    <p><strong>Name:</strong> ${safeRepoName}</p>
+                    <p><strong>URL:</strong> <a href="${safeRepoUrl}" target="_blank" rel="noopener noreferrer">${safeRepoUrlLabel}</a></p>
+                    <p>${escapedMessage}</p>
+                </div>
+                ${detailsHtml}
             </div>
         `;
 
-        const mergeStepsElement = resultsContent.querySelector('.merge-command-list');
-        if (mergeStepsElement) {
-            mergeStepsElement.textContent = mergeSteps;
+        if (fallbackInstructions) {
+            const codeElement = document.getElementById('merge-commands-code');
+            const copyButton = document.getElementById('copy-merge-commands-btn');
+
+            if (codeElement) {
+                codeElement.textContent = fallbackCommands;
+            }
+
+            if (copyButton) {
+                copyButton.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(fallbackCommands);
+                        this.showSuccess('Merge commands copied to clipboard');
+                    } catch {
+                        this.showError('Failed to copy merge commands');
+                    }
+                });
+            }
         }
 
-        const copyButton = resultsContent.querySelector('.copy-btn');
-        if (copyButton) {
-            copyButton.addEventListener('click', async () => {
-                try {
-                    await navigator.clipboard.writeText(mergeSteps);
-                    this.showSuccess('Merge commands copied to clipboard');
-                } catch {
-                    this.showError('Failed to copy merge commands');
-                }
-            });
-        }
-        
         resultsSection.style.display = 'block';
         resultsSection.scrollIntoView({ behavior: 'smooth' });
     }

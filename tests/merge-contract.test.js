@@ -42,7 +42,7 @@ describe('Merge and rate-limit contract', () => {
                 });
 
             expect(res.statusCode).toBe(400);
-            expect(res.body.error).toContain('credential-free GitHub clone_url');
+            expect(res.body.error).toContain('invalid clone_url');
             expect(axios.post).not.toHaveBeenCalled();
         });
 
@@ -61,20 +61,64 @@ describe('Merge and rate-limit contract', () => {
                 });
 
             expect(res.statusCode).toBe(400);
-            expect(res.body.error).toContain('credential-free GitHub clone_url');
+            expect(res.body.error).toContain('invalid clone_url');
             expect(axios.post).not.toHaveBeenCalled();
         });
 
-        it('should return manual merge pending messaging for successful repository creation', async () => {
+        it('should return automated merge messaging for successful repository creation', async () => {
             axios.post.mockResolvedValue({
                 data: {
                     name: 'merged-repo',
                     full_name: 'testuser/merged-repo',
                     html_url: 'https://github.com/testuser/merged-repo',
                     clone_url: 'https://github.com/testuser/merged-repo.git',
-                    ssh_url: 'git@github.com:testuser/merged-repo.git'
+                    ssh_url: 'git@github.com:testuser/merged-repo.git',
+                    default_branch: 'main'
                 }
             });
+
+            axios.get.mockImplementation(url => {
+                if (url === 'https://api.github.com/repos/octocat/repo-one') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url === 'https://api.github.com/repos/testuser/merged-repo') {
+                    return Promise.resolve({ data: { default_branch: 'main' } });
+                }
+
+                if (url.includes('/octocat/repo-one/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            truncated: false,
+                            tree: [
+                                { type: 'blob', path: 'README.md', sha: 'blob-sha', size: 20, mode: '100644' }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/testuser/merged-repo/git/trees/main?recursive=1')) {
+                    return Promise.resolve({
+                        data: {
+                            truncated: false,
+                            tree: []
+                        }
+                    });
+                }
+
+                if (url.includes('/git/blobs/blob-sha')) {
+                    return Promise.resolve({
+                        data: {
+                            content: Buffer.from('hello').toString('base64'),
+                            encoding: 'base64'
+                        }
+                    });
+                }
+
+                throw new Error(`Unexpected axios.get URL in test: ${url}`);
+            });
+
+            axios.put.mockResolvedValue({ data: { content: { path: 'repo-one/README.md' } } });
 
             const res = await request(app)
                 .post('/api/create-merged-repo')
@@ -85,10 +129,9 @@ describe('Merge and rate-limit contract', () => {
                 });
 
             expect(res.statusCode).toBe(200);
-            expect(res.body.message).toBe('Repository created successfully. Manual merge steps are still required.');
-            expect(res.body.merge_status).toBe('pending_manual_steps');
-            expect(res.body.merge_instructions.note).toContain('merge is not complete');
-            expect(res.body.merge_instructions.interruption_note).toContain('stop partway through');
+            expect(res.body.message).toBe('Repository created and merged automatically');
+            expect(res.body.automated_merge.aborted).toBe(false);
+            expect(res.body.automated_merge.mergedFiles).toBe(1);
         });
     });
 
