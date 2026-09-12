@@ -47,7 +47,7 @@ cp .env.example .env
 PORT=3000                    # Port to run the local server on
 NODE_ENV=development         # development | production | test
 LOG_LEVEL=INFO               # Logging level (DEBUG, INFO, WARN, ERROR)
-ALLOWED_ORIGINS=             # Comma-separated CORS allowlist; leave blank to allow all
+ALLOWED_ORIGINS=             # Comma-separated CORS allowlist; leave blank to allow only same-origin/no-Origin requests
 ```
 
 See [docs/deployment/environment.md](../deployment/environment.md) for the full reference.

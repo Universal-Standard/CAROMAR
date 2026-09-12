@@ -91,14 +91,11 @@ app.use(helmet({
     }
 }));
 
-// CORS: honor ALLOWED_ORIGINS when configured, otherwise reflect same-origin
-// requests only (no Origin header) and allow all others by default to
-// preserve backward compatibility for browser-only, token-in-header usage.
-// Configuring ALLOWED_ORIGINS in production is recommended (see
-// docs/deployment/environment.md).
+// CORS: honor ALLOWED_ORIGINS when configured. When unset/empty, only
+// same-origin requests (no Origin header) are allowed by default.
 app.use(cors({
     origin: (origin, callback) => {
-        if (allowedOrigins.length === 0 || isAllowedOrigin(origin, allowedOrigins)) {
+        if (isAllowedOrigin(origin, allowedOrigins)) {
             return callback(null, true);
         }
         logger.warn('Blocked request from disallowed origin', { origin });
@@ -173,6 +170,14 @@ function tokenAwareRateLimit(req, res, next) {
  * else before it reaches route handlers.
  */
 function requireJsonContentType(req, res, next) {
+    const contentLength = req.headers['content-length'];
+    const hasTransferEncoding = typeof req.headers['transfer-encoding'] === 'string';
+    const hasBody = hasTransferEncoding || (typeof contentLength === 'string' && contentLength !== '0');
+
+    if (!hasBody) {
+        return next();
+    }
+
     if (!isAllowedContentType(req.headers['content-type'])) {
         return res.status(415).json({ error: 'Content-Type must be application/json' });
     }
