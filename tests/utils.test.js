@@ -38,6 +38,8 @@ describe('Validation Utilities', () => {
         it('should reject invalid repository names', () => {
             expect(isValidRepositoryName('')).toBe(false);
             expect(isValidRepositoryName('a'.repeat(101))).toBe(false); // too long
+            expect(isValidRepositoryName('.')).toBe(false);
+            expect(isValidRepositoryName('..')).toBe(false);
         });
     });
 
@@ -93,6 +95,8 @@ describe('Validation Utilities', () => {
             expect(isValidGitHubCloneUrl('javascript:alert(1)')).toBe(false);
             expect(isValidGitHubCloneUrl('https://github.com:8443/octocat/hello-world.git')).toBe(false);
             expect(isValidGitHubCloneUrl('https://github.com/octo_cat/hello-world.git')).toBe(false);
+            expect(isValidGitHubCloneUrl('https://github.com/octocat/..git')).toBe(false);
+            expect(isValidGitHubCloneUrl('https://github.com/octocat/...git')).toBe(false);
         });
     });
 

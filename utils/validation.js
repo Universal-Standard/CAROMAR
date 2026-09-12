@@ -27,7 +27,7 @@ function isValidRepositoryName(repoName) {
     }
     // Repository name rules: alphanumeric + hyphens/underscores/dots, 1-100 characters
     const repoNameRegex = /^[a-zA-Z0-9._-]{1,100}$/;
-    return repoNameRegex.test(repoName);
+    return repoNameRegex.test(repoName) && repoName !== '.' && repoName !== '..';
 }
 
 /**

@@ -471,12 +471,7 @@ class EnhancedCaromarApp {
     }
 
     sanitizeLink(url) {
-        try {
-            const parsed = new URL(url);
-            return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? parsed.toString() : '#';
-        } catch {
-            return '#';
-        }
+        return this.getSafeExternalUrl(url);
     }
 
     isValidGitHubUsername(username) {
@@ -871,6 +866,7 @@ class EnhancedCaromarApp {
         const existingRepoInput = document.getElementById('existing-repo-full-name');
         const checkRepoButton = document.getElementById('check-repo-name');
         const mergedRepoName = document.getElementById('merged-repo-name');
+        const mergedRepoDescription = document.getElementById('merged-repo-description');
         const privateOption = document.getElementById('merged-repo-private');
 
         if (targetMode === 'existing') {
@@ -879,6 +875,7 @@ class EnhancedCaromarApp {
             existingRepoInput.disabled = false;
             checkRepoButton.style.display = 'none';
             mergedRepoName.disabled = true;
+            mergedRepoDescription.disabled = true;
             privateOption.disabled = true;
         } else {
             existingRepoGroup.style.display = 'none';
@@ -886,6 +883,7 @@ class EnhancedCaromarApp {
             existingRepoInput.disabled = true;
             checkRepoButton.style.display = 'inline-flex';
             mergedRepoName.disabled = false;
+            mergedRepoDescription.disabled = false;
             privateOption.disabled = false;
         }
     }
@@ -1100,7 +1098,7 @@ class EnhancedCaromarApp {
                     target: targetMode,
                     target_repository: targetMode === 'existing' ? existingRepoFullName : undefined,
                     merge_strategy: mergeStrategy,
-                    description: mergedRepoDescription,
+                    description: targetMode === 'new' ? mergedRepoDescription : undefined,
                     repositories: repos.map(repo => ({
                         name: repo.name,
                         full_name: repo.full_name,

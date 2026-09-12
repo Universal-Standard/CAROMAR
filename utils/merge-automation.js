@@ -46,12 +46,26 @@ function createMergeLimitError(message) {
     return error;
 }
 
-function estimateMergeRequestCount({ sourceRepositoryCount, totalFiles, targetRepositoryRequestCount = 2 }) {
+function estimateMergeRequestCount({ sourceRepositoryCount, totalFiles, targetRepositoryRequestCount = 3 }) {
     return (sourceRepositoryCount * 2) + (totalFiles * 2) + targetRepositoryRequestCount;
 }
 
 function isRateLimitExceededError(error) {
-    return error.response?.status === 403 && String(error.response?.headers?.['x-ratelimit-remaining']) === '0';
+    const responseStatus = error.response?.status;
+    if (responseStatus === 429) {
+        return true;
+    }
+
+    if (responseStatus !== 403) {
+        return false;
+    }
+
+    if (String(error.response?.headers?.['x-ratelimit-remaining']) === '0') {
+        return true;
+    }
+
+    const responseMessage = String(error.response?.data?.message || '').toLowerCase();
+    return responseMessage.includes('secondary rate limit');
 }
 
 function getRateLimitAbortReason(error) {
@@ -173,11 +187,24 @@ function generateAIMergeInsights(repositoryResults) {
 async function getRepositoryTree(axiosClient, headers, sourceFullName) {
     const repoResponse = await axiosClient.get(`https://api.github.com/repos/${sourceFullName}`, { headers });
     const defaultBranch = repoResponse.data.default_branch || 'main';
+    let treeResponse;
 
-    const treeResponse = await axiosClient.get(
-        `https://api.github.com/repos/${sourceFullName}/git/trees/${encodeURIComponent(defaultBranch)}?recursive=1`,
-        { headers }
-    );
+    try {
+        treeResponse = await axiosClient.get(
+            `https://api.github.com/repos/${sourceFullName}/git/trees/${encodeURIComponent(defaultBranch)}?recursive=1`,
+            { headers }
+        );
+    } catch (error) {
+        if (error.response?.status === 409) {
+            return {
+                files: [],
+                defaultBranch,
+                emptyRepository: true
+            };
+        }
+
+        throw error;
+    }
 
     if (treeResponse.data?.truncated) {
         throw createMergeLimitError(
@@ -190,7 +217,8 @@ async function getRepositoryTree(axiosClient, headers, sourceFullName) {
 
     return {
         files,
-        defaultBranch
+        defaultBranch,
+        emptyRepository: false
     };
 }
 
@@ -222,19 +250,19 @@ async function mergeRepositoriesIntoTarget({
     })).repositories;
     const usedTargetPaths = new Set(reservedTargetPaths.map(path => String(path).toLowerCase()));
 
-    const reserveTargetPath = (sourceRepositoryName, sourcePath) => {
+    const hasPathConflict = candidatePath => [...usedTargetPaths].some(path =>
+        path === candidatePath ||
+        path.startsWith(`${candidatePath}/`) ||
+        candidatePath.startsWith(`${path}/`)
+    );
+
+    const selectTargetPath = (sourceRepositoryName, sourcePath) => {
         const primaryPath = mergeStrategy === MERGE_STRATEGIES.COHESIVE
             ? sourcePath
             : `${sourceRepositoryName}/${sourcePath}`;
-        const hasPathConflict = candidatePath => [...usedTargetPaths].some(path =>
-            path === candidatePath ||
-            path.startsWith(`${candidatePath}/`) ||
-            candidatePath.startsWith(`${path}/`)
-        );
         const normalizedPrimaryPath = primaryPath.toLowerCase();
 
         if (!hasPathConflict(normalizedPrimaryPath)) {
-            usedTargetPaths.add(normalizedPrimaryPath);
             return primaryPath;
         }
 
@@ -242,7 +270,6 @@ async function mergeRepositoriesIntoTarget({
             const fallbackPath = `${sourceRepositoryName}/${sourcePath}`;
             const normalizedFallbackPath = fallbackPath.toLowerCase();
             if (!hasPathConflict(normalizedFallbackPath)) {
-                usedTargetPaths.add(normalizedFallbackPath);
                 return fallbackPath;
             }
         }
@@ -266,7 +293,7 @@ async function mergeRepositoriesIntoTarget({
             repositoryResult.capabilities = inferRepositoryCapabilities(files);
 
             for (const file of files) {
-                const targetPath = reserveTargetPath(sourceRepository.name, file.path);
+                const targetPath = selectTargetPath(sourceRepository.name, file.path);
 
                 if (!targetPath) {
                     const reason = `Skipped ${sourceRepository.name}/${file.path}: path conflict in target repository`;
@@ -317,6 +344,16 @@ async function mergeRepositoriesIntoTarget({
                         continue;
                     }
 
+                    const normalizedTargetPath = targetPath.toLowerCase();
+                    if (hasPathConflict(normalizedTargetPath)) {
+                        const reason = `Skipped ${sourceRepository.name}/${file.path}: path conflict in target repository`;
+                        summary.skippedFiles.push(reason);
+                        repositoryResult.skippedFiles.push(reason);
+                        continue;
+                    }
+
+                    usedTargetPaths.add(normalizedTargetPath);
+
                     const createContentRequest = {
                         message: `Merge ${sourceRepository.full_name}: add ${file.path}`,
                         content: normalizeBase64Content(blobResponse.data.content)
@@ -335,6 +372,7 @@ async function mergeRepositoriesIntoTarget({
                     summary.mergedFiles += 1;
                     repositoryResult.mergedFiles += 1;
                 } catch (error) {
+                    usedTargetPaths.delete(targetPath.toLowerCase());
                     const abortReason = getRateLimitAbortReason(error);
                     if (abortReason) {
                         summary.aborted = true;

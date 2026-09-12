@@ -143,7 +143,7 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
     });
 
     it('rejects automated merges that would exceed the synchronous GitHub request budget before creating the target repository', async () => {
-        const fileCountThatExceedsRequestBudget = Math.floor((MAX_MERGE_API_REQUESTS - 4) / 2) + 1;
+        const fileCountThatExceedsRequestBudget = Math.floor((MAX_MERGE_API_REQUESTS - 5) / 2) + 1;
 
         axios.get.mockImplementation(url => {
             if (url === 'https://api.github.com/repos/octocat/repo-one') {
@@ -536,5 +536,182 @@ describe('Merged Repository Endpoint Validation (Real Server)', () => {
         expect(response.statusCode).toBe(400);
         expect(response.body.error).toContain('target_repository cannot also be included');
         expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('deletes a newly created repository when merge fails after creation', async () => {
+        axios.post.mockResolvedValue({
+            data: {
+                name: 'secure-merge',
+                full_name: 'octocat/secure-merge',
+                html_url: 'https://github.com/octocat/secure-merge',
+                clone_url: 'https://github.com/octocat/secure-merge.git',
+                ssh_url: 'git@github.com:octocat/secure-merge.git',
+                default_branch: 'main'
+            }
+        });
+
+        axios.get.mockImplementation(url => {
+            if (url === 'https://api.github.com/repos/octocat/repo-one' || url === 'https://api.github.com/repos/octocat/secure-merge') {
+                return Promise.resolve({ data: { default_branch: 'main' } });
+            }
+
+            if (url.includes('/octocat/repo-one/git/trees/main?recursive=1')) {
+                return Promise.resolve({
+                    data: {
+                        truncated: false,
+                        tree: [{ type: 'blob', path: 'README.md', sha: 'blob-sha', size: 20, mode: '100644' }]
+                    }
+                });
+            }
+
+            if (url.includes('/octocat/secure-merge/git/trees/main?recursive=1')) {
+                const error = new Error('Target tree unavailable');
+                error.response = { status: 500, data: { message: 'Target tree unavailable' } };
+                return Promise.reject(error);
+            }
+
+            throw new Error(`Unexpected axios.get URL in test: ${url}`);
+        });
+
+        axios.delete.mockResolvedValue({ data: {} });
+
+        const response = await request(app)
+            .post('/api/create-merged-repo')
+            .send({
+                name: 'secure-merge',
+                token: validToken,
+                repositories: [
+                    {
+                        name: 'repo-one',
+                        full_name: 'octocat/repo-one',
+                        clone_url: 'https://github.com/octocat/repo-one.git'
+                    }
+                ]
+            });
+
+        expect(response.statusCode).toBe(500);
+        expect(response.body.error).toContain('Failed to complete repository merge');
+        expect(axios.delete).toHaveBeenCalledTimes(1);
+        expect(axios.delete).toHaveBeenCalledWith(
+            'https://api.github.com/repos/octocat/secure-merge',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    Authorization: `token ${validToken}`
+                })
+            })
+        );
+    });
+
+    it('preserves original merge failure response when cleanup delete also fails', async () => {
+        axios.post.mockResolvedValue({
+            data: {
+                name: 'secure-merge',
+                full_name: 'octocat/secure-merge',
+                html_url: 'https://github.com/octocat/secure-merge',
+                clone_url: 'https://github.com/octocat/secure-merge.git',
+                ssh_url: 'git@github.com:octocat/secure-merge.git',
+                default_branch: 'main'
+            }
+        });
+
+        axios.get.mockImplementation(url => {
+            if (url === 'https://api.github.com/repos/octocat/repo-one' || url === 'https://api.github.com/repos/octocat/secure-merge') {
+                return Promise.resolve({ data: { default_branch: 'main' } });
+            }
+
+            if (url.includes('/octocat/repo-one/git/trees/main?recursive=1')) {
+                return Promise.resolve({
+                    data: {
+                        truncated: false,
+                        tree: [{ type: 'blob', path: 'README.md', sha: 'blob-sha', size: 20, mode: '100644' }]
+                    }
+                });
+            }
+
+            if (url.includes('/octocat/secure-merge/git/trees/main?recursive=1')) {
+                const error = new Error('Target tree unavailable');
+                error.response = { status: 500, data: { message: 'Target tree unavailable' } };
+                return Promise.reject(error);
+            }
+
+            throw new Error(`Unexpected axios.get URL in test: ${url}`);
+        });
+
+        axios.delete.mockRejectedValue(new Error('Cleanup delete failed'));
+
+        const response = await request(app)
+            .post('/api/create-merged-repo')
+            .send({
+                name: 'secure-merge',
+                token: validToken,
+                repositories: [
+                    {
+                        name: 'repo-one',
+                        full_name: 'octocat/repo-one',
+                        clone_url: 'https://github.com/octocat/repo-one.git'
+                    }
+                ]
+            });
+
+        expect(response.statusCode).toBe(500);
+        expect(response.body.details).toBe('Target tree unavailable');
+        expect(axios.delete).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not attempt cleanup delete for existing-target merge failures', async () => {
+        axios.get.mockImplementation(url => {
+            if (url === 'https://api.github.com/repos/octocat/existing-target') {
+                return Promise.resolve({
+                    data: {
+                        name: 'existing-target',
+                        full_name: 'octocat/existing-target',
+                        html_url: 'https://github.com/octocat/existing-target',
+                        clone_url: 'https://github.com/octocat/existing-target.git',
+                        ssh_url: 'git@github.com:octocat/existing-target.git',
+                        default_branch: 'main',
+                        permissions: { push: true }
+                    }
+                });
+            }
+
+            if (url === 'https://api.github.com/repos/octocat/repo-one') {
+                return Promise.resolve({ data: { default_branch: 'main' } });
+            }
+
+            if (url.includes('/octocat/repo-one/git/trees/main?recursive=1')) {
+                return Promise.resolve({
+                    data: {
+                        truncated: false,
+                        tree: [{ type: 'blob', path: 'README.md', sha: 'blob-sha', size: 20, mode: '100644' }]
+                    }
+                });
+            }
+
+            if (url.includes('/octocat/existing-target/git/trees/main?recursive=1')) {
+                const error = new Error('Target tree unavailable');
+                error.response = { status: 500, data: { message: 'Target tree unavailable' } };
+                return Promise.reject(error);
+            }
+
+            throw new Error(`Unexpected axios.get URL in test: ${url}`);
+        });
+
+        const response = await request(app)
+            .post('/api/create-merged-repo')
+            .send({
+                target: 'existing',
+                target_repository: 'octocat/existing-target',
+                token: validToken,
+                repositories: [
+                    {
+                        name: 'repo-one',
+                        full_name: 'octocat/repo-one',
+                        clone_url: 'https://github.com/octocat/repo-one.git'
+                    }
+                ]
+            });
+
+        expect(response.statusCode).toBe(500);
+        expect(axios.delete).not.toHaveBeenCalled();
     });
 });

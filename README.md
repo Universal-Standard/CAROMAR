@@ -51,7 +51,7 @@ Deploy CAROMAR to Netlify with one click:
   - **Subfolders**: each source repository becomes a main folder
   - **Cohesive**: merges at target root with automatic conflict fallback folders
 - Maintains separation while creating unified access
-- Fully automated server-side merge execution (no manual git steps required)
+- Automated server-side merge execution with per-file skip/abort reporting for follow-up
 - Repository descriptor validation (name/full_name/clone_url + duplicate detection) before merge
 - Custom naming for the merged repository
 
@@ -190,7 +190,7 @@ Choose between two operation modes:
 ### Step 5: Review Results
 - View detailed results of the operation
 - Access direct links to newly created repositories
-- For merge operations, complete the provided local/manual git steps before treating the merge as finished
+- For merge operations, review `automated_merge` details and follow up on skipped files or abort reasons before treating the merge as complete
 - Review any errors or issues encountered
 
 ---

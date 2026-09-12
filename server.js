@@ -565,7 +565,9 @@ app.post('/api/create-merged-repo', requireJsonContentType, tokenAwareRateLimit,
         let initializeTargetRepository = false;
 
         try {
-            ({ files: targetRepositoryFiles } = await getRepositoryTree(axios, headers, targetRepositoryResponse.full_name));
+            const targetTree = await getRepositoryTree(axios, headers, targetRepositoryResponse.full_name);
+            targetRepositoryFiles = targetTree.files;
+            initializeTargetRepository = target === 'existing' && Boolean(targetTree.emptyRepository);
         } catch (error) {
             if (!(target === 'existing' && error.response?.status === 409)) {
                 throw error;
