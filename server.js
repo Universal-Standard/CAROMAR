@@ -91,11 +91,12 @@ app.use(helmet({
     }
 }));
 
-// CORS: honor ALLOWED_ORIGINS when configured. When unset/empty, only
-// same-origin requests (no Origin header) are allowed by default.
+// CORS: honor ALLOWED_ORIGINS when configured, otherwise reflect same-origin
+// requests only (no Origin header) and allow all others by default to
+// preserve backward compatibility for browser-only, token-in-header usage.
 app.use(cors({
     origin: (origin, callback) => {
-        if (isAllowedOrigin(origin, allowedOrigins)) {
+        if (allowedOrigins.length === 0 || isAllowedOrigin(origin, allowedOrigins)) {
             return callback(null, true);
         }
         logger.warn('Blocked request from disallowed origin', { origin });
