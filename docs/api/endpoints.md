@@ -46,7 +46,7 @@ Get the current status of the API server.
 ### Performance Metrics
 Get aggregated request performance metrics (uptime monitoring / debugging).
 
-**Endpoint:** `GET /metrics`
+**Endpoint:** `GET /api/metrics`
 
 **Response:**
 ```json
@@ -343,7 +343,7 @@ Perform analytics on a collection of repositories.
 ### Compare Repositories
 Compare two or more repositories.
 
-**Endpoint:** `POST /compare-repos`
+**Endpoint:** `POST /api/compare-repos`
 
 **Request Body:**
 ```json

@@ -145,9 +145,16 @@ app.use('/api/', apiLimiter);
  */
 function tokenAwareRateLimit(req, res, next) {
     const authHeader = req.headers.authorization;
-    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    let headerToken = null;
+    if (typeof authHeader === 'string') {
+        if (authHeader.startsWith('Bearer ')) {
+            headerToken = authHeader.substring(7);
+        } else if (authHeader.startsWith('token ')) {
+            headerToken = authHeader.substring(6);
+        }
+    }
     const bodyToken = typeof req.body?.token === 'string' ? req.body.token : null;
-    const identifierSource = bearerToken || bodyToken;
+    const identifierSource = headerToken || bodyToken;
     const identifier = identifierSource ? `token:${simpleHash(identifierSource)}` : `ip:${req.ip}`;
 
     if (!tokenRateLimiter.checkLimit(identifier)) {
