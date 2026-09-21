@@ -38,10 +38,10 @@ permissions:
 
 jobs:
   universal-portfolio:
-    uses: Universal-Standard/.github/.github/workflows/universal-portfolio-agent.yml@dc7bb47d8ba2b7aa838b5c60860d0ad648f7884d
+    uses: Universal-Standard/.github/.github/workflows/universal-portfolio-agent.yml@3de2c21ceeceeb440b499ceb07dcc749c202aee1
     with:
       system: caromar
-      policy_ref: dc7bb47d8ba2b7aa838b5c60860d0ad648f7884d
+      policy_ref: 3de2c21ceeceeb440b499ceb07dcc749c202aee1
       project_id: ${{ vars.PORTFOLIO_PROJECT_ID || '' }}
       enable_auto_merge: true
       max_remediation_passes: 10
