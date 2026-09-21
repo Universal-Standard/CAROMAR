@@ -38,15 +38,15 @@ permissions:
 
 jobs:
   universal-portfolio:
-    uses: Universal-Standard/.github/.github/workflows/universal-portfolio-agent.yml@d447b6795288bbaec580ddcca0782310e8a55f80
+    uses: Universal-Standard/.github/.github/workflows/universal-portfolio-agent.yml@dc7bb47d8ba2b7aa838b5c60860d0ad648f7884d
     with:
       system: caromar
-      policy_ref: d447b6795288bbaec580ddcca0782310e8a55f80
+      policy_ref: dc7bb47d8ba2b7aa838b5c60860d0ad648f7884d
       project_id: ${{ vars.PORTFOLIO_PROJECT_ID || '' }}
       enable_auto_merge: true
       max_remediation_passes: 10
       reconcile_mode: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'current-item' }}
-      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || true }}
+      dry_run: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
     secrets:
       COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
       PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
