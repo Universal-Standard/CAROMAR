@@ -1,0 +1,89 @@
+area/architecture:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "architecture/**"
+          - "docs/architecture/**"
+          - "**/adr/**"
+          - "**/ADRs/**"
+
+area/agents:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/agents/**"
+          - "**/orchestration/**"
+          - "**/task-graph/**"
+          - "**/planner/**"
+
+area/mcp:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/mcp/**"
+          - "**/*mcp-server*"
+          - "**/*model-context-protocol*"
+
+area/standards:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "standards/**"
+          - "schemas/**"
+          - "contracts/**"
+          - "protocols/**"
+          - "specifications/**"
+
+area/security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/security/**"
+          - "**/auth/**"
+          - "**/identity/**"
+          - "**/iam/**"
+          - "**/permissions/**"
+          - "**/policy/**"
+          - "**/trust/**"
+
+area/ci-cd:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/actions/**"
+          - "**/Dockerfile"
+          - "**/docker-compose*.yml"
+          - "**/terraform/**"
+          - "**/helm/**"
+          - "**/kubernetes/**"
+
+area/testing:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/test/**"
+          - "**/tests/**"
+          - "**/__tests__/**"
+          - "**/*.test.*"
+          - "**/*.spec.*"
+
+area/documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/README.md"
+          - "**/readme.md"
+          - "**/CONTRIBUTING.md"
+          - "**/CHANGELOG.md"
+
+area/data:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/database/**"
+          - "**/db/**"
+          - "**/migrations/**"
+          - "**/persistence/**"
+          - "**/storage/**"
+          - "**/*.sql"
+
+area/api:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/api/**"
+          - "**/sdk/**"
+          - "**/*openapi*"
+          - "**/*graphql*"
