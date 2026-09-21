@@ -66,6 +66,7 @@ area/documentation:
       - any-glob-to-any-file:
           - "docs/**"
           - "**/README.md"
+          - "**/readme.md"
           - "**/CONTRIBUTING.md"
           - "**/CHANGELOG.md"
 
